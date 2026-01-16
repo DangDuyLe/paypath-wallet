@@ -8,8 +8,8 @@ const Receive = () => {
   const { username, isConnected } = useWallet();
   const [copied, setCopied] = useState(false);
 
-  if (!isConnected || !username) {
-    navigate('/');
+  if (!username) {
+    navigate('/onboarding', { replace: true });
     return null;
   }
 

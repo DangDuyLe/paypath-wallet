@@ -55,8 +55,8 @@ const Send = () => {
   const [isParsing, setIsParsing] = useState(false);
   const [externalBank, setExternalBank] = useState<ExternalBankInfo | null>(null);
 
-  if (!isConnected || !username) {
-    navigate('/');
+  if (!username) {
+    navigate('/onboarding', { replace: true });
     return null;
   }
 

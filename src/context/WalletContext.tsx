@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { useSignAndExecuteTransaction, useSuiClient, useCurrentAccount } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 
@@ -114,6 +115,7 @@ const USDC_TO_VND_RATE = 25500;
 export function WalletProvider({ children }: { children: ReactNode }) {
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
+  const { address: authAddress } = useAuth();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   const [state, setState] = useState<WalletState>({
@@ -263,12 +265,39 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  useEffect(() => {
+    if (!authAddress) return;
+
+    setState(prev => {
+      if (prev.walletAddress === authAddress && prev.isConnected) {
+        return prev;
+      }
+
+      const walletId = 'auth-main';
+      const newWallet: LinkedWallet = {
+        id: walletId,
+        address: authAddress,
+        name: 'Main Wallet',
+      };
+
+      return {
+        ...prev,
+        isConnected: true,
+        walletAddress: authAddress,
+        linkedWallets: [newWallet],
+        defaultAccountId: walletId,
+        defaultAccountType: 'wallet',
+      };
+    });
+  }, [authAddress]);
+
   // Auto-refresh balance when account connects or changes
   useEffect(() => {
-    if (currentAccount?.address) {
+    const address = currentAccount?.address ?? authAddress;
+    if (address) {
       refreshBalance();
     }
-  }, [currentAccount?.address, refreshBalance]);
+  }, [currentAccount?.address, authAddress, refreshBalance]);
 
   // Validate wallet address format (0x followed by 64 hex chars)
   const isValidWalletAddress = (address: string): boolean => {

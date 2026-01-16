@@ -42,8 +42,8 @@ const Settings = () => {
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState('');
 
-  if (!isConnected || !username) {
-    navigate('/');
+  if (!username) {
+    navigate('/onboarding', { replace: true });
     return null;
   }
 

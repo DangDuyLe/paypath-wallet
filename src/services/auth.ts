@@ -12,7 +12,7 @@ export interface VerifyResponse {
 }
 
 export async function getChallenge(address: string): Promise<ChallengeResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/challenge?address=${address}`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/challenge?address=${address}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -35,7 +35,7 @@ export async function verifySignature(payload: {
   message: string;
   signature: string;
 }): Promise<VerifyResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

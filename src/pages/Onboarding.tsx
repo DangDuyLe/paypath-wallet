@@ -4,21 +4,18 @@ import { useWallet } from '@/context/WalletContext';
 
 const Onboarding = () => {
   const navigate = useNavigate();
-  const { setUsername, isConnected, username: existingUsername } = useWallet();
+  const { setUsername, username: existingUsername } = useWallet();
   const [inputUsername, setInputUsername] = useState('');
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(false);
 
   useEffect(() => {
-    if (!isConnected) {
-      navigate('/login', { replace: true });
-      return;
-    }
-
     if (existingUsername) {
-      navigate('/dashboard', { replace: true });
+      if (window.location.pathname !== '/dashboard') {
+        navigate('/dashboard', { replace: true });
+      }
     }
-  }, [isConnected, existingUsername, navigate]);
+  }, [existingUsername, navigate]);
 
   const handleSubmit = () => {
     const clean = inputUsername.replace('@', '').trim().toLowerCase();

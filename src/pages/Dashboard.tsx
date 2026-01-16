@@ -17,12 +17,12 @@ const Dashboard = () => {
   } = useWallet();
 
   useEffect(() => {
-    if (!isConnected || !username) {
-      navigate('/');
+    if (!username) {
+      navigate('/onboarding', { replace: true });
     }
-  }, [isConnected, username, navigate]);
+  }, [username, navigate]);
 
-  if (!isConnected || !username) {
+  if (!username) {
     return null;
   }
 
