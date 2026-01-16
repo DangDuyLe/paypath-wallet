@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { ChevronRight, Building2, Scan, Check, X, Loader2, LogOut, History, HelpCircle, Key } from 'lucide-react';
+import QRScanner from '@/components/QRScanner';
 
 interface ScannedBankData {
   bankName: string;
@@ -13,6 +14,7 @@ const Settings = () => {
   const navigate = useNavigate();
   const { username, disconnect, isConnected, linkedBank, linkBankAccount } = useWallet();
   const [showLinkBank, setShowLinkBank] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scannedData, setScannedData] = useState<ScannedBankData | null>(null);
 
@@ -26,20 +28,26 @@ const Settings = () => {
     navigate('/');
   };
 
-  const handleScanBankQR = async () => {
+  const handleScanBankQR = () => {
+    setShowScanner(true);
+  };
+
+  // Called when QR is scanned - backend team will implement actual parsing
+  const handleQRScanned = (rawData: string) => {
+    setShowScanner(false);
     setIsScanning(true);
-    
-    // Simulate QR scanning and parsing VietQR
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Mock parsed data from VietQR
-    setScannedData({
-      bankName: 'Vietcombank',
-      accountNumber: '0123456789',
-      beneficiaryName: 'NGUYEN VAN DUY',
-    });
-    
-    setIsScanning(false);
+    console.log('Bank QR Data received:', rawData);
+
+    // TODO: Backend team will parse rawData (VietQR format) here
+    // For now, simulate with mock data after a short delay
+    setTimeout(() => {
+      setScannedData({
+        bankName: 'Vietcombank',
+        accountNumber: '0123456789',
+        beneficiaryName: 'NGUYEN VAN DUY',
+      });
+      setIsScanning(false);
+    }, 500);
   };
 
   const handleSaveBank = () => {
@@ -53,91 +61,101 @@ const Settings = () => {
   // Link Bank Modal
   if (showLinkBank) {
     return (
-      <div className="app-container">
-        <div className="page-wrapper">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-6 animate-fade-in">
-            <h1 className="text-xl font-bold">Link Bank Account</h1>
-            <button 
-              onClick={() => {
-                setShowLinkBank(false);
-                setScannedData(null);
-              }}
-              className="p-2 rounded-xl hover:bg-secondary transition-colors"
-            >
-              <X className="w-5 h-5 text-muted-foreground" />
-            </button>
-          </div>
+      <>
+        {/* QR Scanner Modal */}
+        <QRScanner
+          isOpen={showScanner}
+          onClose={() => setShowScanner(false)}
+          onScan={handleQRScanned}
+          title="Quét QR ngân hàng"
+        />
 
-          <div className="flex-1 animate-slide-up">
-            {/* Scan Button */}
-            <button 
-              onClick={handleScanBankQR}
-              disabled={isScanning}
-              className="w-full card-container flex items-center justify-center gap-3 hover:bg-secondary transition-colors cursor-pointer mb-6"
-            >
-              {isScanning ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Scan className="w-5 h-5" />
+        <div className="app-container">
+          <div className="page-wrapper">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-6 animate-fade-in">
+              <h1 className="text-xl font-bold">Link Bank Account</h1>
+              <button
+                onClick={() => {
+                  setShowLinkBank(false);
+                  setScannedData(null);
+                }}
+                className="p-2 rounded-xl hover:bg-secondary transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            <div className="flex-1 animate-slide-up">
+              {/* Scan Button */}
+              <button
+                onClick={handleScanBankQR}
+                disabled={isScanning}
+                className="w-full card-container flex items-center justify-center gap-3 hover:bg-secondary transition-colors cursor-pointer mb-6"
+              >
+                {isScanning ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Scan className="w-5 h-5" />
+                )}
+                <span className="font-semibold">
+                  {isScanning ? 'Scanning...' : 'Scan / Upload Bank QR'}
+                </span>
+              </button>
+
+              {/* Scanned Data Preview */}
+              {scannedData && (
+                <div className="card-container animate-slide-up">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-success/10 text-success flex items-center justify-center">
+                      <Check className="w-5 h-5" />
+                    </div>
+                    <p className="font-semibold">QR Scanned Successfully</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
+                        Bank Name
+                      </label>
+                      <div className="input-modern bg-secondary">
+                        {scannedData.bankName}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
+                        Account Number
+                      </label>
+                      <div className="input-modern bg-secondary font-mono">
+                        {scannedData.accountNumber}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
+                        Beneficiary Name
+                      </label>
+                      <div className="input-modern bg-secondary">
+                        {scannedData.beneficiaryName}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
-              <span className="font-semibold">
-                {isScanning ? 'Scanning...' : 'Scan / Upload Bank QR'}
-              </span>
+            </div>
+
+            {/* Save Button */}
+            <button
+              onClick={handleSaveBank}
+              className="btn-primary mt-6"
+              disabled={!scannedData}
+            >
+              Save Bank Account
             </button>
-
-            {/* Scanned Data Preview */}
-            {scannedData && (
-              <div className="card-container animate-slide-up">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-success/10 text-success flex items-center justify-center">
-                    <Check className="w-5 h-5" />
-                  </div>
-                  <p className="font-semibold">QR Scanned Successfully</p>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
-                      Bank Name
-                    </label>
-                    <div className="input-modern bg-secondary">
-                      {scannedData.bankName}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
-                      Account Number
-                    </label>
-                    <div className="input-modern bg-secondary font-mono">
-                      {scannedData.accountNumber}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
-                      Beneficiary Name
-                    </label>
-                    <div className="input-modern bg-secondary">
-                      {scannedData.beneficiaryName}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
-
-          {/* Save Button */}
-          <button 
-            onClick={handleSaveBank}
-            className="btn-primary mt-6"
-            disabled={!scannedData}
-          >
-            Save Bank Account
-          </button>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -147,7 +165,7 @@ const Settings = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-6 animate-fade-in">
           <h1 className="text-xl font-bold">Settings</h1>
-          <button 
+          <button
             onClick={() => navigate('/dashboard')}
             className="text-muted-foreground text-sm font-medium hover:text-foreground transition-colors"
           >
@@ -173,7 +191,7 @@ const Settings = () => {
           <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-3">
             Linked Bank
           </h2>
-          
+
           {linkedBank ? (
             <div className="card-container">
               <div className="flex items-center gap-4">
@@ -186,7 +204,7 @@ const Settings = () => {
                     ****{linkedBank.accountNumber.slice(-4)} • {linkedBank.beneficiaryName}
                   </p>
                 </div>
-                <button 
+                <button
                   onClick={() => setShowLinkBank(true)}
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
@@ -195,7 +213,7 @@ const Settings = () => {
               </div>
             </div>
           ) : (
-            <button 
+            <button
               onClick={() => setShowLinkBank(true)}
               className="w-full card-container flex items-center justify-between hover:bg-secondary transition-colors cursor-pointer"
             >
@@ -262,8 +280,8 @@ const Settings = () => {
 
         {/* Disconnect */}
         <div className="mt-auto animate-slide-up">
-          <button 
-            onClick={handleDisconnect} 
+          <button
+            onClick={handleDisconnect}
             className="w-full card-container flex items-center justify-center gap-2 text-destructive hover:bg-destructive/5 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
