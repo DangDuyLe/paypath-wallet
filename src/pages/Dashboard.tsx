@@ -1,18 +1,19 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { useEffect } from 'react';
-import { Send, QrCode, ArrowDownLeft, ArrowUpRight, Settings } from 'lucide-react';
+import { Send, QrCode, ArrowDownLeft, ArrowUpRight, Settings, RefreshCw } from 'lucide-react';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const {
     username,
-    balance,
+    suiBalance,
+    usdcBalance,
     balanceVnd,
     transactions,
     isConnected,
-    defaultAccountType,
-    getDefaultAccount,
+    isLoadingBalance,
+    refreshBalance,
   } = useWallet();
 
   useEffect(() => {
@@ -38,9 +39,6 @@ const Dashboard = () => {
     return new Intl.NumberFormat('vi-VN').format(amount);
   };
 
-  const defaultAccount = getDefaultAccount();
-  const isDefaultBank = defaultAccountType === 'bank';
-
   return (
     <div className="app-container">
       <div className="page-wrapper">
@@ -60,23 +58,27 @@ const Dashboard = () => {
 
         {/* Balance */}
         <div className="py-12 animate-slide-up">
-          {defaultAccount && (
-            <p className="label-caps mb-2">
-              {defaultAccount.name} · {isDefaultBank ? 'VND' : 'SUI'}
-            </p>
-          )}
+          <div className="flex items-center gap-2 mb-2">
+            <p className="label-caps">USDC Balance</p>
+            <button
+              onClick={refreshBalance}
+              disabled={isLoadingBalance}
+              className="p-1 hover:bg-secondary rounded transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 text-muted-foreground ${isLoadingBalance ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
 
-          {isDefaultBank ? (
-            <>
-              <p className="display-large">{formatVnd(balanceVnd)}<span className="text-3xl text-muted-foreground ml-2">₫</span></p>
-              <p className="text-muted-foreground text-lg mt-2">≈ {balance.toFixed(2)} SUI</p>
-            </>
-          ) : (
-            <>
-              <p className="display-large">{balance.toFixed(2)}<span className="text-3xl text-muted-foreground ml-2">SUI</span></p>
-              <p className="text-muted-foreground text-lg mt-2">≈ {formatVnd(balanceVnd)} ₫</p>
-            </>
-          )}
+          <p className="display-large">
+            {isLoadingBalance ? '...' : usdcBalance.toFixed(2)}
+            <span className="text-3xl text-muted-foreground ml-2">USDC</span>
+          </p>
+          <p className="text-muted-foreground text-lg mt-2">≈ {formatVnd(balanceVnd)} ₫</p>
+
+          {/* SUI Balance for gas */}
+          <p className="text-sm text-muted-foreground mt-4">
+            Gas: {suiBalance.toFixed(4)} SUI
+          </p>
         </div>
 
         {/* Actions */}
@@ -123,7 +125,7 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <p className={`font-semibold ${tx.type === 'sent' ? 'text-foreground' : 'text-success'}`}>
-                  {tx.type === 'sent' ? '−' : '+'}{tx.amount} SUI
+                  {tx.type === 'sent' ? '−' : '+'}{tx.amount} USDC
                 </p>
               </div>
             ))}

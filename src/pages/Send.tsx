@@ -5,8 +5,9 @@ import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2 } f
 import QRScanner from '@/components/QRScanner';
 import * as gaian from '@/services/gaian';
 
-type SendStep = 'input' | 'review' | 'success';
+type SendStep = 'input' | 'review' | 'sending' | 'success' | 'error';
 type ScanResult = 'none' | 'internal' | 'external' | 'error';
+type RecipientType = 'none' | 'username' | 'address';
 
 interface ExternalBankInfo {
   bankName: string;
@@ -18,8 +19,9 @@ interface ExternalBankInfo {
 const Send = () => {
   const navigate = useNavigate();
   const {
-    sendSui,
-    balance,
+    sendUsdc,
+    suiBalance,
+    usdcBalance,
     isConnected,
     username,
     lookupUsername,
@@ -27,6 +29,7 @@ const Send = () => {
     linkedBanks,
     defaultAccountId,
     defaultAccountType,
+    isValidWalletAddress,
   } = useWallet();
 
   const [step, setStep] = useState<SendStep>('input');
@@ -38,6 +41,9 @@ const Send = () => {
   // Recipient validation
   const [isChecking, setIsChecking] = useState(false);
   const [recipientValid, setRecipientValid] = useState<boolean | null>(null);
+  const [recipientAddress, setRecipientAddress] = useState<string | null>(null);
+  const [recipientType, setRecipientType] = useState<RecipientType>('none');
+  const [recipientDisplayName, setRecipientDisplayName] = useState<string | null>(null);
 
   // Source selection
   const [showSourceMenu, setShowSourceMenu] = useState(false);
@@ -48,7 +54,6 @@ const Send = () => {
   const [scanResult, setScanResult] = useState<ScanResult>('none');
   const [isParsing, setIsParsing] = useState(false);
   const [externalBank, setExternalBank] = useState<ExternalBankInfo | null>(null);
-  const [foundPayPathUser, setFoundPayPathUser] = useState<string | null>(null);
 
   if (!isConnected || !username) {
     navigate('/');
@@ -56,79 +61,124 @@ const Send = () => {
   }
 
   const allSources = [
-    ...linkedWallets.map(w => ({ id: w.id, type: 'wallet' as const, name: w.name })),
-    ...linkedBanks.map(b => ({ id: b.id, type: 'bank' as const, name: b.bankName })),
+    ...linkedWallets.map(w => ({ id: w.id, type: 'wallet' as const, name: w.name, address: w.address })),
+    ...linkedBanks.map(b => ({ id: b.id, type: 'bank' as const, name: b.bankName, address: null })),
   ];
 
   const selectedSource = allSources.find(s => s.id === selectedSourceId && s.type === selectedSourceType) || allSources[0];
 
-  const fee = 0.01;
+  const fee = 0.001; // Gas fee in SUI
 
+  // Check if input is @username or 0x... address
   const checkRecipient = () => {
-    if (!recipient || recipient.length < 2) return;
+    const input = recipient.trim();
+    if (!input || input.length < 2) return;
+
     setIsChecking(true);
+    setError('');
+
     setTimeout(() => {
-      const user = lookupUsername(recipient.replace('@', ''));
-      setRecipientValid(!!user);
-      setError('');
+      // Check if it's a wallet address (0x...)
+      if (input.startsWith('0x')) {
+        if (isValidWalletAddress(input)) {
+          setRecipientValid(true);
+          setRecipientAddress(input);
+          setRecipientType('address');
+          setRecipientDisplayName(input.slice(0, 8) + '...' + input.slice(-4));
+        } else {
+          setRecipientValid(false);
+          setRecipientAddress(null);
+          setRecipientType('none');
+          setError('Invalid wallet address format');
+        }
+      }
+      // Check if it's a username (@username or just username)
+      else {
+        const cleanUsername = input.replace('@', '').toLowerCase();
+        const user = lookupUsername(cleanUsername);
+
+        if (user && user.walletAddress) {
+          setRecipientValid(true);
+          setRecipientAddress(user.walletAddress);
+          setRecipientType('username');
+          setRecipientDisplayName(`@${user.username}`);
+        } else if (user) {
+          setRecipientValid(false);
+          setRecipientAddress(null);
+          setRecipientType('none');
+          setError('User has no linked wallet');
+        } else {
+          setRecipientValid(false);
+          setRecipientAddress(null);
+          setRecipientType('none');
+          setError('User not found');
+        }
+      }
+
       setIsChecking(false);
     }, 300);
   };
 
-  // Handle QR scan with Method A logic
   const handleQRScanned = async (qrString: string) => {
     setShowScanner(false);
     setIsParsing(true);
     setError('');
     setScanResult('none');
     setExternalBank(null);
-    setFoundPayPathUser(null);
 
     try {
-      // Step 1: Check if it's a PayPath username/QR
+      // Check if it's a PayPath username QR
       if (gaian.isPayPathQr(qrString)) {
         const extractedUsername = gaian.extractPayPathUsername(qrString);
-
-        // Look up the user in our system
         const user = lookupUsername(extractedUsername);
 
-        if (user) {
-          // Internal PayPath transfer
-          setFoundPayPathUser(extractedUsername);
+        if (user && user.walletAddress) {
           setRecipient(`@${extractedUsername}`);
           setRecipientValid(true);
+          setRecipientAddress(user.walletAddress);
+          setRecipientType('username');
+          setRecipientDisplayName(`@${user.username}`);
           setScanResult('internal');
         } else {
-          // Username not found
           setRecipient(`@${extractedUsername}`);
           setRecipientValid(false);
           setScanResult('error');
-          setError(`User @${extractedUsername} not found`);
+          setError(user ? 'User has no linked wallet' : `User @${extractedUsername} not found`);
         }
         setIsParsing(false);
         return;
       }
 
-      // Step 2: Not a PayPath QR - call Gaian API
+      // Check if it's a raw wallet address
+      if (qrString.startsWith('0x') && isValidWalletAddress(qrString)) {
+        setRecipient(qrString);
+        setRecipientValid(true);
+        setRecipientAddress(qrString);
+        setRecipientType('address');
+        setRecipientDisplayName(qrString.slice(0, 8) + '...' + qrString.slice(-4));
+        setScanResult('internal');
+        setIsParsing(false);
+        return;
+      }
+
+      // Try parsing as bank QR (VietQR)
       const parsedBank = await gaian.parseQrString(qrString);
 
       if (parsedBank) {
-        // External bank transfer
         setExternalBank({
           bankName: parsedBank.bankName,
           accountNumber: parsedBank.accountNumber,
           beneficiaryName: parsedBank.beneficiaryName,
           amount: parsedBank.amount,
         });
-        setRecipient(`${parsedBank.beneficiaryName} (${parsedBank.bankName})`);
+        setRecipient(`${parsedBank.beneficiaryName}`);
+        setRecipientDisplayName(`${parsedBank.beneficiaryName} (${parsedBank.bankName})`);
         setScanResult('external');
 
-        // Pre-fill amount if provided in QR
         if (parsedBank.amount) {
           setAmount(parsedBank.amount.toString());
         }
       } else {
-        // Invalid QR
         setScanResult('error');
         setError('Invalid QR Code');
       }
@@ -145,34 +195,91 @@ const Send = () => {
     const amountNum = parseFloat(amount);
 
     if (scanResult === 'external' && externalBank) {
-      // External bank transfer
       if (isNaN(amountNum) || amountNum <= 0) { setError('Invalid amount'); return; }
-      if (amountNum + fee > balance) { setError('Insufficient balance'); return; }
+      if (amountNum > usdcBalance) { setError('Insufficient USDC balance'); return; }
+      if (suiBalance < fee) { setError('Not enough SUI for gas fees'); return; }
       setStep('review');
       return;
     }
 
-    // Internal transfer
     if (!recipient) { setError('Enter recipient'); return; }
-    if (!recipientValid) { setError('Check recipient first'); return; }
+    if (!recipientValid || !recipientAddress) { setError('Verify recipient first'); return; }
     if (isNaN(amountNum) || amountNum <= 0) { setError('Invalid amount'); return; }
-    if (amountNum + fee > balance) { setError('Insufficient balance'); return; }
+    if (amountNum > usdcBalance) { setError('Insufficient USDC balance'); return; }
+    if (suiBalance < fee) { setError('Not enough SUI for gas fees'); return; }
     setStep('review');
   };
 
-  const handleConfirm = () => {
-    sendSui(recipient, parseFloat(amount));
-    setStep('success');
+  const handleConfirm = async () => {
+    if (!recipientAddress && scanResult !== 'external') {
+      setError('No recipient address');
+      return;
+    }
+
+    setStep('sending');
+
+    try {
+      const toAddress = recipientAddress || '0x0000000000000000000000000000000000000000000000000000000000000000';
+      const success = await sendUsdc(toAddress, parseFloat(amount));
+
+      if (success) {
+        setStep('success');
+      } else {
+        setError('Transaction failed');
+        setStep('error');
+      }
+    } catch (err) {
+      console.error('Send error:', err);
+      setError('Transaction failed');
+      setStep('error');
+    }
   };
 
-  const clearScanResult = () => {
+  const clearRecipient = () => {
     setScanResult('none');
     setExternalBank(null);
-    setFoundPayPathUser(null);
     setRecipient('');
     setRecipientValid(null);
+    setRecipientAddress(null);
+    setRecipientType('none');
+    setRecipientDisplayName(null);
     setError('');
   };
+
+  // Sending state
+  if (step === 'sending') {
+    return (
+      <div className="app-container">
+        <div className="page-wrapper justify-center items-center text-center">
+          <div className="animate-fade-in">
+            <Loader2 className="w-16 h-16 mx-auto mb-6 animate-spin text-muted-foreground" />
+            <p className="text-xl font-bold mb-2">Sending...</p>
+            <p className="text-muted-foreground">{amount} USDC</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (step === 'error') {
+    return (
+      <div className="app-container">
+        <div className="page-wrapper justify-center items-center text-center">
+          <div className="animate-fade-in">
+            <div className="w-20 h-20 mx-auto mb-6 flex items-center justify-center bg-destructive/10">
+              <AlertTriangle className="w-10 h-10 text-destructive" />
+            </div>
+            <p className="display-medium mb-4">Failed</p>
+            <p className="text-muted-foreground">{error}</p>
+          </div>
+          <button onClick={() => setStep('input')} className="btn-primary mt-12 animate-slide-up">
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Success
   if (step === 'success') {
@@ -184,8 +291,8 @@ const Send = () => {
               <Check className="w-10 h-10 text-success" />
             </div>
             <p className="display-medium mb-4">Sent</p>
-            <p className="text-2xl font-bold">{amount} SUI</p>
-            <p className="text-muted-foreground mt-2">to {recipient}</p>
+            <p className="text-2xl font-bold">{amount} USDC</p>
+            <p className="text-muted-foreground mt-2">to {recipientDisplayName || recipient}</p>
           </div>
           <button onClick={() => navigate('/dashboard')} className="btn-primary mt-12 animate-slide-up">
             Done
@@ -218,8 +325,14 @@ const Send = () => {
               </div>
               <div className="row-item px-4">
                 <span className="text-muted-foreground">To</span>
-                <span className="font-medium">{recipient}</span>
+                <span className="font-medium">{recipientDisplayName || recipient}</span>
               </div>
+              {recipientType === 'address' && (
+                <div className="row-item px-4">
+                  <span className="text-muted-foreground">Address</span>
+                  <span className="font-mono text-sm">{recipientAddress?.slice(0, 10)}...{recipientAddress?.slice(-6)}</span>
+                </div>
+              )}
               {isExternal && externalBank && (
                 <>
                   <div className="row-item px-4">
@@ -232,21 +345,21 @@ const Send = () => {
                   </div>
                   <div className="row-item px-4 bg-warning/10">
                     <span className="text-warning font-medium">Type</span>
-                    <span className="text-warning font-medium">Off-ramp (SUI → VND)</span>
+                    <span className="text-warning font-medium">Off-ramp (USDC → VND)</span>
                   </div>
                 </>
               )}
               <div className="row-item px-4">
                 <span className="text-muted-foreground">Amount</span>
-                <span className="font-medium">{amount} SUI</span>
+                <span className="font-medium">{amount} USDC</span>
               </div>
               <div className="row-item px-4">
-                <span className="text-muted-foreground">Fee</span>
-                <span className="font-medium">{fee} SUI</span>
+                <span className="text-muted-foreground">Gas Fee</span>
+                <span className="font-medium">~{fee} SUI</span>
               </div>
               <div className="row-item px-4 bg-secondary">
                 <span className="font-bold">Total</span>
-                <span className="font-bold">{(parseFloat(amount) + fee).toFixed(2)} SUI</span>
+                <span className="font-bold">{amount} USDC + ~{fee} SUI</span>
               </div>
             </div>
           </div>
@@ -272,11 +385,23 @@ const Send = () => {
       <div className="app-container">
         <div className="page-wrapper">
           <div className="flex justify-between items-center mb-8 animate-fade-in">
-            <h1 className="text-xl font-bold">Send</h1>
+            <h1 className="text-xl font-bold">Send USDC</h1>
             <button onClick={() => navigate('/dashboard')} className="btn-ghost">Cancel</button>
           </div>
 
           <div className="flex-1 space-y-6 animate-slide-up">
+            {/* Balance Info */}
+            <div className="border border-border p-4">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">USDC Balance</span>
+                <span className="font-bold">{usdcBalance.toFixed(2)} USDC</span>
+              </div>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-sm text-muted-foreground">SUI (for gas)</span>
+                <span className="text-sm text-muted-foreground">{suiBalance.toFixed(4)} SUI</span>
+              </div>
+            </div>
+
             {/* Source */}
             <div>
               <p className="label-caps mb-2">From</p>
@@ -341,7 +466,7 @@ const Send = () => {
                     <Building2 className="w-4 h-4 text-warning" />
                     <span className="text-warning font-medium">External Transfer</span>
                   </div>
-                  <button onClick={clearScanResult} className="text-sm text-muted-foreground hover:text-foreground">
+                  <button onClick={clearRecipient} className="text-sm text-muted-foreground hover:text-foreground">
                     Clear
                   </button>
                 </div>
@@ -360,27 +485,37 @@ const Send = () => {
               </div>
             )}
 
-            {/* Internal PayPath User Result */}
-            {scanResult === 'internal' && foundPayPathUser && (
+            {/* Validated Recipient Result */}
+            {scanResult !== 'external' && recipientValid && recipientAddress && (
               <div className="border border-success animate-slide-up">
                 <div className="row-item px-4 bg-success/10">
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-success" />
-                    <span className="text-success font-medium">PayPath User Found</span>
+                    <span className="text-success font-medium">
+                      {recipientType === 'username' ? 'PayPath User' : 'Valid Address'}
+                    </span>
                   </div>
-                  <button onClick={clearScanResult} className="text-sm text-muted-foreground hover:text-foreground">
+                  <button onClick={clearRecipient} className="text-sm text-muted-foreground hover:text-foreground">
                     Clear
                   </button>
                 </div>
                 <div className="row-item px-4">
-                  <span className="text-muted-foreground">Username</span>
-                  <span className="font-medium">@{foundPayPathUser}</span>
+                  <span className="text-muted-foreground">
+                    {recipientType === 'username' ? 'Username' : 'Address'}
+                  </span>
+                  <span className="font-medium">{recipientDisplayName}</span>
                 </div>
+                {recipientType === 'username' && recipientAddress && (
+                  <div className="row-item px-4">
+                    <span className="text-muted-foreground">Wallet</span>
+                    <span className="font-mono text-sm">{recipientAddress.slice(0, 10)}...{recipientAddress.slice(-6)}</span>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Manual Recipient (only show if no scan result) */}
-            {scanResult === 'none' && (
+            {/* Manual Recipient Input */}
+            {scanResult !== 'external' && !recipientValid && (
               <div>
                 <p className="label-caps mb-2">To</p>
                 <div className="flex gap-2">
@@ -391,10 +526,13 @@ const Send = () => {
                       onChange={(e) => {
                         setRecipient(e.target.value);
                         setRecipientValid(null);
+                        setRecipientAddress(null);
+                        setRecipientType('none');
+                        setRecipientDisplayName(null);
                         setError('');
                       }}
                       onKeyDown={(e) => e.key === 'Enter' && checkRecipient()}
-                      placeholder="@username"
+                      placeholder="@username or 0x... address"
                       className={`input-box w-full pr-10 ${recipientValid === true ? 'border-success' :
                           recipientValid === false ? 'border-destructive' : ''
                         }`}
@@ -414,13 +552,11 @@ const Send = () => {
                     {isChecking ? '...' : 'Check'}
                   </button>
                 </div>
-                {recipientValid === true && (
-                  <p className="text-success text-sm mt-2 flex items-center gap-1">
-                    <Check className="w-3 h-3" /> User found
-                  </p>
-                )}
-                {recipientValid === false && (
-                  <p className="text-destructive text-sm mt-2">User not found</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Enter a @username or wallet address (0x...)
+                </p>
+                {recipientValid === false && error && (
+                  <p className="text-destructive text-sm mt-2">{error}</p>
                 )}
               </div>
             )}
@@ -433,23 +569,22 @@ const Send = () => {
                   type="number"
                   value={amount}
                   onChange={(e) => { setAmount(e.target.value); setError(''); }}
-                  onFocus={() => {
-                    if (recipient && recipientValid === null && scanResult === 'none') checkRecipient();
-                  }}
                   placeholder="0.00"
                   className="input-box flex-1 border-r-0"
                   step="0.01"
                   min="0"
                 />
                 <div className="px-6 py-4 border border-border bg-secondary text-muted-foreground font-medium">
-                  SUI
+                  USDC
                 </div>
               </div>
-              <p className="text-muted-foreground text-sm mt-2">Available: {balance.toFixed(2)} SUI</p>
+              <p className="text-muted-foreground text-sm mt-2">
+                Available: {usdcBalance.toFixed(2)} USDC
+              </p>
             </div>
 
             {/* Error */}
-            {error && (
+            {error && scanResult !== 'none' && (
               <div className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="w-4 h-4" />
                 <p className="font-medium">{error}</p>
@@ -459,7 +594,7 @@ const Send = () => {
 
           <button
             onClick={validate}
-            disabled={scanResult === 'none' ? (!recipient || !amount) : !amount}
+            disabled={scanResult === 'external' ? !amount : (!recipientValid || !amount)}
             className="btn-primary mt-8"
           >
             Continue
