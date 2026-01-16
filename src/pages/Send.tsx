@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2 } from 'lucide-react';
+import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2 } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
+import * as gaian from '@/services/gaian';
 
 type SendStep = 'input' | 'review' | 'success';
+type ScanResult = 'none' | 'internal' | 'external' | 'error';
+
+interface ExternalBankInfo {
+  bankName: string;
+  accountNumber: string;
+  beneficiaryName: string;
+  amount?: number;
+}
 
 const Send = () => {
   const navigate = useNavigate();
@@ -35,6 +44,12 @@ const Send = () => {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(defaultAccountId);
   const [selectedSourceType, setSelectedSourceType] = useState<'wallet' | 'bank'>(defaultAccountType);
 
+  // QR Scan result
+  const [scanResult, setScanResult] = useState<ScanResult>('none');
+  const [isParsing, setIsParsing] = useState(false);
+  const [externalBank, setExternalBank] = useState<ExternalBankInfo | null>(null);
+  const [foundPayPathUser, setFoundPayPathUser] = useState<string | null>(null);
+
   if (!isConnected || !username) {
     navigate('/');
     return null;
@@ -60,14 +75,84 @@ const Send = () => {
     }, 300);
   };
 
-  const handleQRScanned = (data: string) => {
+  // Handle QR scan with Method A logic
+  const handleQRScanned = async (qrString: string) => {
     setShowScanner(false);
-    setRecipient('@duy3000');
-    setRecipientValid(true);
+    setIsParsing(true);
+    setError('');
+    setScanResult('none');
+    setExternalBank(null);
+    setFoundPayPathUser(null);
+
+    try {
+      // Step 1: Check if it's a PayPath username/QR
+      if (gaian.isPayPathQr(qrString)) {
+        const extractedUsername = gaian.extractPayPathUsername(qrString);
+
+        // Look up the user in our system
+        const user = lookupUsername(extractedUsername);
+
+        if (user) {
+          // Internal PayPath transfer
+          setFoundPayPathUser(extractedUsername);
+          setRecipient(`@${extractedUsername}`);
+          setRecipientValid(true);
+          setScanResult('internal');
+        } else {
+          // Username not found
+          setRecipient(`@${extractedUsername}`);
+          setRecipientValid(false);
+          setScanResult('error');
+          setError(`User @${extractedUsername} not found`);
+        }
+        setIsParsing(false);
+        return;
+      }
+
+      // Step 2: Not a PayPath QR - call Gaian API
+      const parsedBank = await gaian.parseQrString(qrString);
+
+      if (parsedBank) {
+        // External bank transfer
+        setExternalBank({
+          bankName: parsedBank.bankName,
+          accountNumber: parsedBank.accountNumber,
+          beneficiaryName: parsedBank.beneficiaryName,
+          amount: parsedBank.amount,
+        });
+        setRecipient(`${parsedBank.beneficiaryName} (${parsedBank.bankName})`);
+        setScanResult('external');
+
+        // Pre-fill amount if provided in QR
+        if (parsedBank.amount) {
+          setAmount(parsedBank.amount.toString());
+        }
+      } else {
+        // Invalid QR
+        setScanResult('error');
+        setError('Invalid QR Code');
+      }
+    } catch (err) {
+      console.error('QR parsing error:', err);
+      setScanResult('error');
+      setError('Failed to parse QR code');
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   const validate = () => {
     const amountNum = parseFloat(amount);
+
+    if (scanResult === 'external' && externalBank) {
+      // External bank transfer
+      if (isNaN(amountNum) || amountNum <= 0) { setError('Invalid amount'); return; }
+      if (amountNum + fee > balance) { setError('Insufficient balance'); return; }
+      setStep('review');
+      return;
+    }
+
+    // Internal transfer
     if (!recipient) { setError('Enter recipient'); return; }
     if (!recipientValid) { setError('Check recipient first'); return; }
     if (isNaN(amountNum) || amountNum <= 0) { setError('Invalid amount'); return; }
@@ -78,6 +163,15 @@ const Send = () => {
   const handleConfirm = () => {
     sendSui(recipient, parseFloat(amount));
     setStep('success');
+  };
+
+  const clearScanResult = () => {
+    setScanResult('none');
+    setExternalBank(null);
+    setFoundPayPathUser(null);
+    setRecipient('');
+    setRecipientValid(null);
+    setError('');
   };
 
   // Success
@@ -103,6 +197,8 @@ const Send = () => {
 
   // Review
   if (step === 'review') {
+    const isExternal = scanResult === 'external' && externalBank;
+
     return (
       <div className="app-container">
         <div className="page-wrapper">
@@ -124,6 +220,22 @@ const Send = () => {
                 <span className="text-muted-foreground">To</span>
                 <span className="font-medium">{recipient}</span>
               </div>
+              {isExternal && externalBank && (
+                <>
+                  <div className="row-item px-4">
+                    <span className="text-muted-foreground">Bank</span>
+                    <span className="font-medium">{externalBank.bankName}</span>
+                  </div>
+                  <div className="row-item px-4">
+                    <span className="text-muted-foreground">Account</span>
+                    <span className="font-mono">{externalBank.accountNumber}</span>
+                  </div>
+                  <div className="row-item px-4 bg-warning/10">
+                    <span className="text-warning font-medium">Type</span>
+                    <span className="text-warning font-medium">Off-ramp (SUI → VND)</span>
+                  </div>
+                </>
+              )}
               <div className="row-item px-4">
                 <span className="text-muted-foreground">Amount</span>
                 <span className="font-medium">{amount} SUI</span>
@@ -202,58 +314,116 @@ const Send = () => {
               )}
             </div>
 
-            {/* Recipient */}
-            <div>
-              <p className="label-caps mb-2">To</p>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={recipient}
-                    onChange={(e) => {
-                      setRecipient(e.target.value);
-                      setRecipientValid(null);
-                      setError('');
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && checkRecipient()}
-                    placeholder="@username"
-                    className={`input-box w-full pr-10 ${recipientValid === true ? 'border-success' :
-                      recipientValid === false ? 'border-destructive' : ''
-                      }`}
-                  />
-                  {recipientValid === true && (
-                    <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-success" />
-                  )}
-                  {recipientValid === false && (
-                    <AlertTriangle className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-destructive" />
-                  )}
-                </div>
-                <button
-                  onClick={checkRecipient}
-                  disabled={!recipient || isChecking}
-                  className="px-6 border border-border hover:bg-secondary transition-colors disabled:opacity-30"
-                >
-                  {isChecking ? '...' : 'Check'}
-                </button>
-              </div>
-              {recipientValid === true && (
-                <p className="text-success text-sm mt-2 flex items-center gap-1">
-                  <Check className="w-3 h-3" /> User found
-                </p>
-              )}
-              {recipientValid === false && (
-                <p className="text-destructive text-sm mt-2">User not found</p>
-              )}
-            </div>
-
             {/* Scan QR */}
             <button
               onClick={() => setShowScanner(true)}
-              className="w-full py-4 border border-border text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+              disabled={isParsing}
+              className="w-full py-4 border border-border text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <Scan className="w-5 h-5" />
-              Scan QR Code
+              {isParsing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Parsing QR...
+                </>
+              ) : (
+                <>
+                  <Scan className="w-5 h-5" />
+                  Scan QR Code
+                </>
+              )}
             </button>
+
+            {/* External Bank Result */}
+            {scanResult === 'external' && externalBank && (
+              <div className="border border-border animate-slide-up">
+                <div className="row-item px-4 bg-warning/10">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-warning" />
+                    <span className="text-warning font-medium">External Transfer</span>
+                  </div>
+                  <button onClick={clearScanResult} className="text-sm text-muted-foreground hover:text-foreground">
+                    Clear
+                  </button>
+                </div>
+                <div className="row-item px-4">
+                  <span className="text-muted-foreground">Bank</span>
+                  <span className="font-medium">{externalBank.bankName}</span>
+                </div>
+                <div className="row-item px-4">
+                  <span className="text-muted-foreground">Account</span>
+                  <span className="font-mono">{externalBank.accountNumber}</span>
+                </div>
+                <div className="row-item px-4">
+                  <span className="text-muted-foreground">Name</span>
+                  <span className="font-medium">{externalBank.beneficiaryName}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Internal PayPath User Result */}
+            {scanResult === 'internal' && foundPayPathUser && (
+              <div className="border border-success animate-slide-up">
+                <div className="row-item px-4 bg-success/10">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-success" />
+                    <span className="text-success font-medium">PayPath User Found</span>
+                  </div>
+                  <button onClick={clearScanResult} className="text-sm text-muted-foreground hover:text-foreground">
+                    Clear
+                  </button>
+                </div>
+                <div className="row-item px-4">
+                  <span className="text-muted-foreground">Username</span>
+                  <span className="font-medium">@{foundPayPathUser}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Manual Recipient (only show if no scan result) */}
+            {scanResult === 'none' && (
+              <div>
+                <p className="label-caps mb-2">To</p>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={recipient}
+                      onChange={(e) => {
+                        setRecipient(e.target.value);
+                        setRecipientValid(null);
+                        setError('');
+                      }}
+                      onKeyDown={(e) => e.key === 'Enter' && checkRecipient()}
+                      placeholder="@username"
+                      className={`input-box w-full pr-10 ${recipientValid === true ? 'border-success' :
+                          recipientValid === false ? 'border-destructive' : ''
+                        }`}
+                    />
+                    {recipientValid === true && (
+                      <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-success" />
+                    )}
+                    {recipientValid === false && (
+                      <AlertTriangle className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-destructive" />
+                    )}
+                  </div>
+                  <button
+                    onClick={checkRecipient}
+                    disabled={!recipient || isChecking}
+                    className="px-6 border border-border hover:bg-secondary transition-colors disabled:opacity-30"
+                  >
+                    {isChecking ? '...' : 'Check'}
+                  </button>
+                </div>
+                {recipientValid === true && (
+                  <p className="text-success text-sm mt-2 flex items-center gap-1">
+                    <Check className="w-3 h-3" /> User found
+                  </p>
+                )}
+                {recipientValid === false && (
+                  <p className="text-destructive text-sm mt-2">User not found</p>
+                )}
+              </div>
+            )}
 
             {/* Amount */}
             <div>
@@ -264,7 +434,7 @@ const Send = () => {
                   value={amount}
                   onChange={(e) => { setAmount(e.target.value); setError(''); }}
                   onFocus={() => {
-                    if (recipient && recipientValid === null) checkRecipient();
+                    if (recipient && recipientValid === null && scanResult === 'none') checkRecipient();
                   }}
                   placeholder="0.00"
                   className="input-box flex-1 border-r-0"
@@ -289,7 +459,7 @@ const Send = () => {
 
           <button
             onClick={validate}
-            disabled={!recipient || !amount}
+            disabled={scanResult === 'none' ? (!recipient || !amount) : !amount}
             className="btn-primary mt-8"
           >
             Continue

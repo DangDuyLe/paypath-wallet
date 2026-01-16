@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Camera, Upload, SwitchCamera } from 'lucide-react';
+import { X, Camera, Upload, SwitchCamera, Loader2 } from 'lucide-react';
+import jsQR from 'jsqr';
 
 interface QRScannerProps {
   isOpen: boolean;
@@ -11,9 +12,12 @@ interface QRScannerProps {
 const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScannerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>('');
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const scanIntervalRef = useRef<number | null>(null);
 
   // Start camera when modal opens
   useEffect(() => {
@@ -41,6 +45,8 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        // Start continuous scanning
+        startContinuousScan();
       }
       setStream(mediaStream);
     } catch (err) {
@@ -50,6 +56,10 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
   };
 
   const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
       setStream(null);
@@ -60,50 +70,121 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Continuous scanning from camera feed
+  const startContinuousScan = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+    }
+
+    scanIntervalRef.current = window.setInterval(() => {
+      scanVideoFrame();
+    }, 250); // Scan 4 times per second
+  };
+
+  const scanVideoFrame = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    if (videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) return;
+
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: 'dontInvert',
+    });
+
+    if (code?.data) {
+      console.log('QR Code detected from camera:', code.data);
+      stopCamera();
+      onScan(code.data);
+    }
+  };
+
+  // Decode QR from uploaded image
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Create object URL for the image
-    const imageUrl = URL.createObjectURL(file);
+    setIsProcessing(true);
+    setError('');
 
-    // For now, pass the file URL to parent - backend team will handle actual QR parsing
-    // This simulates a successful scan with placeholder data
-    console.log('File selected:', file.name);
-    
-    // TODO: Backend team will implement actual QR parsing here
-    // For now, we'll call onScan with a mock result after showing the image
-    onScan(`FILE_UPLOAD:${file.name}`);
-    
-    // Clean up
-    URL.revokeObjectURL(imageUrl);
+    try {
+      const qrData = await decodeQRFromFile(file);
+
+      if (qrData) {
+        console.log('QR Code decoded from file:', qrData);
+        onScan(qrData);
+      } else {
+        setError('Không tìm thấy mã QR trong ảnh. Vui lòng thử ảnh khác.');
+      }
+    } catch (err) {
+      console.error('Error decoding QR:', err);
+      setError('Lỗi khi đọc mã QR. Vui lòng thử lại.');
+    } finally {
+      setIsProcessing(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const decodeQRFromFile = (file: File): Promise<string | null> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('Canvas context not available'));
+          return;
+        }
+
+        // Use original image dimensions for better accuracy
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'attemptBoth',
+        });
+
+        URL.revokeObjectURL(objectUrl);
+        resolve(code?.data || null);
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Failed to load image'));
+      };
+
+      img.src = objectUrl;
+    });
   };
 
   const handleCaptureFrame = () => {
-    if (!videoRef.current) return;
-
-    // Create canvas to capture frame
-    const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    const ctx = canvas.getContext('2d');
-    
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0);
-      const imageData = canvas.toDataURL('image/png');
-      
-      // TODO: Backend team will implement actual QR parsing from this image data
-      console.log('Frame captured, ready for QR parsing');
-      
-      // For now, simulate scan result
-      onScan(`CAMERA_CAPTURE:${Date.now()}`);
-    }
+    scanVideoFrame();
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black">
+      {/* Hidden canvas for QR processing */}
+      <canvas ref={canvasRef} className="hidden" />
+
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-10 flex justify-between items-center p-4 bg-gradient-to-b from-black/70 to-transparent">
         <h1 className="text-white font-semibold text-lg">{title}</h1>
@@ -125,10 +206,20 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
             <p className="text-white/80 text-sm mb-6">{error}</p>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-6 py-3 bg-white text-black rounded-xl font-semibold flex items-center gap-2 mx-auto"
+              disabled={isProcessing}
+              className="px-6 py-3 bg-white text-black rounded-xl font-semibold flex items-center gap-2 mx-auto disabled:opacity-50"
             >
-              <Upload className="w-5 h-5" />
-              Upload ảnh QR
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Đang xử lý...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5" />
+                  Upload ảnh QR
+                </>
+              )}
             </button>
           </div>
         ) : (
@@ -155,7 +246,7 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
             {/* Scan line animation */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-64 h-64 overflow-hidden">
-                <div className="w-full h-1 bg-primary animate-scan-line" />
+                <div className="w-full h-1 bg-white animate-scan-line" />
               </div>
             </div>
           </>
@@ -168,15 +259,21 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
           {/* Upload Button */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-4 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+            disabled={isProcessing}
+            className="p-4 rounded-full bg-white/20 hover:bg-white/30 transition-colors disabled:opacity-50"
           >
-            <Upload className="w-6 h-6 text-white" />
+            {isProcessing ? (
+              <Loader2 className="w-6 h-6 text-white animate-spin" />
+            ) : (
+              <Upload className="w-6 h-6 text-white" />
+            )}
           </button>
 
           {/* Capture Button */}
           <button
             onClick={handleCaptureFrame}
-            className="w-16 h-16 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform"
+            disabled={!stream}
+            className="w-16 h-16 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform disabled:opacity-50"
           >
             <div className="w-12 h-12 rounded-full border-4 border-black" />
           </button>
@@ -191,7 +288,7 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
         </div>
 
         <p className="text-center text-white/60 text-sm mt-4">
-          Đưa mã QR vào khung hình hoặc upload ảnh
+          {isProcessing ? 'Đang xử lý mã QR...' : 'Đưa mã QR vào khung hình hoặc upload ảnh'}
         </p>
       </div>
 

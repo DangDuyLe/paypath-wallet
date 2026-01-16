@@ -1,9 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { Wallet, Building2, Scan, Check, Trash2, Star, Shield, LogOut, Key, History, HelpCircle, ChevronRight } from 'lucide-react';
+import { Wallet, Building2, Scan, Check, Trash2, Star, Shield, LogOut, Key, History, HelpCircle, ChevronRight, Loader2, AlertTriangle } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
 import { useDisconnectWallet } from '@mysten/dapp-kit';
+import * as gaian from '@/services/gaian';
+
+interface ScannedBankData {
+  bankName: string;
+  accountNumber: string;
+  beneficiaryName: string;
+}
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -27,7 +34,11 @@ const Settings = () => {
   const [showScanner, setShowScanner] = useState(false);
   const [newWalletName, setNewWalletName] = useState('');
   const [newWalletAddress, setNewWalletAddress] = useState('');
-  const [scannedBank, setScannedBank] = useState<{ bankName: string; accountNumber: string; beneficiaryName: string } | null>(null);
+  const [scannedBank, setScannedBank] = useState<ScannedBankData | null>(null);
+
+  // API parsing state
+  const [isParsing, setIsParsing] = useState(false);
+  const [parseError, setParseError] = useState('');
 
   if (!isConnected || !username) {
     navigate('/');
@@ -49,19 +60,38 @@ const Settings = () => {
     }
   };
 
-  const handleScanBank = (data: string) => {
+  // Handle bank QR scan with Gaian API
+  const handleScanBank = async (qrString: string) => {
     setShowScanner(false);
-    setScannedBank({
-      bankName: 'Vietcombank',
-      accountNumber: Math.random().toString().slice(2, 12),
-      beneficiaryName: 'NGUYEN VAN DUY',
-    });
+    setIsParsing(true);
+    setParseError('');
+    setScannedBank(null);
+
+    try {
+      const parsedBank = await gaian.parseQrString(qrString);
+
+      if (parsedBank) {
+        setScannedBank({
+          bankName: parsedBank.bankName,
+          accountNumber: parsedBank.accountNumber,
+          beneficiaryName: parsedBank.beneficiaryName,
+        });
+      } else {
+        setParseError('Invalid QR Code. Please scan a valid bank QR.');
+      }
+    } catch (error) {
+      console.error('Bank QR parsing error:', error);
+      setParseError('Failed to parse QR code');
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   const handleAddBank = () => {
     if (scannedBank) {
       addBankAccount(scannedBank);
       setScannedBank(null);
+      setParseError('');
       setView('main');
     }
   };
@@ -128,24 +158,43 @@ const Settings = () => {
           <div className="page-wrapper">
             <div className="flex justify-between items-center mb-8 animate-fade-in">
               <h1 className="text-xl font-bold">Link Bank</h1>
-              <button onClick={() => { setView('main'); setScannedBank(null); }} className="btn-ghost">Cancel</button>
+              <button onClick={() => { setView('main'); setScannedBank(null); setParseError(''); }} className="btn-ghost">Cancel</button>
             </div>
 
             <div className="flex-1 animate-slide-up">
               <button
                 onClick={() => setShowScanner(true)}
-                className="w-full py-4 border border-border text-center font-medium hover:bg-secondary transition-colors mb-6 flex items-center justify-center gap-2"
+                disabled={isParsing}
+                className="w-full py-4 border border-border text-center font-medium hover:bg-secondary transition-colors mb-6 flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <Scan className="w-5 h-5" />
-                Scan Bank QR Code
+                {isParsing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Parsing QR...
+                  </>
+                ) : (
+                  <>
+                    <Scan className="w-5 h-5" />
+                    Scan Bank QR Code
+                  </>
+                )}
               </button>
 
+              {/* Parse Error */}
+              {parseError && (
+                <div className="flex items-center gap-2 p-4 border border-destructive text-destructive mb-6">
+                  <AlertTriangle className="w-5 h-5" />
+                  <p className="font-medium">{parseError}</p>
+                </div>
+              )}
+
+              {/* Scanned Bank Info */}
               {scannedBank && (
-                <div className="border border-border">
+                <div className="border border-border animate-slide-up">
                   <div className="row-item px-4 bg-success/10">
                     <div className="flex items-center gap-2">
                       <Check className="w-4 h-4 text-success" />
-                      <span className="text-success font-medium">QR Scanned</span>
+                      <span className="text-success font-medium">QR Parsed Successfully</span>
                     </div>
                   </div>
                   <div className="row-item px-4">
