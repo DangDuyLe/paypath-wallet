@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { ChevronRight, Building2, Scan, Check, X, Loader2, LogOut, History, HelpCircle, Key, Wallet } from 'lucide-react';
+import {
+  ChevronRight, Building2, Scan, Check, X, Loader2, LogOut,
+  History, HelpCircle, Key, Wallet, Plus, Shield, AlertCircle,
+  Trash2, Star
+} from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
 import { useDisconnectWallet } from '@mysten/dapp-kit';
 
@@ -18,17 +22,27 @@ const Settings = () => {
     username,
     disconnect,
     isConnected,
-    linkedBank,
-    linkBankAccount,
+    linkedBanks,
+    linkedWallets,
+    defaultAccountId,
+    defaultAccountType,
+    addBankAccount,
+    removeBankAccount,
+    addLinkedWallet,
+    removeLinkedWallet,
+    setDefaultAccount,
     walletAddress,
-    receivingPreference,
-    setReceivingPreference,
+    kycStatus,
   } = useWallet();
 
-  const [showLinkBank, setShowLinkBank] = useState(false);
+  const [showAddBank, setShowAddBank] = useState(false);
+  const [showAddWallet, setShowAddWallet] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scannedData, setScannedData] = useState<ScannedBankData | null>(null);
+
+  const [newWalletName, setNewWalletName] = useState('');
+  const [newWalletAddress, setNewWalletAddress] = useState('');
 
   if (!isConnected || !username) {
     navigate('/');
@@ -36,9 +50,7 @@ const Settings = () => {
   }
 
   const handleDisconnect = () => {
-    // Disconnect Sui wallet from dapp-kit
     disconnectSuiWallet();
-    // Disconnect from our app context
     disconnect();
     navigate('/login');
   };
@@ -47,18 +59,14 @@ const Settings = () => {
     setShowScanner(true);
   };
 
-  // Called when QR is scanned - backend team will implement actual parsing
   const handleQRScanned = (rawData: string) => {
     setShowScanner(false);
     setIsScanning(true);
-    console.log('Bank QR Data received:', rawData);
 
-    // TODO: Backend team will parse rawData (VietQR format) here
-    // For now, simulate with mock data after a short delay
     setTimeout(() => {
       setScannedData({
         bankName: 'Vietcombank',
-        accountNumber: '0123456789',
+        accountNumber: Math.random().toString().slice(2, 12),
         beneficiaryName: 'NGUYEN VAN DUY',
       });
       setIsScanning(false);
@@ -67,17 +75,93 @@ const Settings = () => {
 
   const handleSaveBank = () => {
     if (scannedData) {
-      linkBankAccount(scannedData);
-      setShowLinkBank(false);
+      addBankAccount(scannedData);
+      setShowAddBank(false);
       setScannedData(null);
     }
   };
 
-  // Link Bank Modal
-  if (showLinkBank) {
+  const handleAddWallet = () => {
+    if (newWalletName.trim() && newWalletAddress.trim()) {
+      addLinkedWallet({
+        name: newWalletName.trim(),
+        address: newWalletAddress.trim(),
+      });
+      setNewWalletName('');
+      setNewWalletAddress('');
+      setShowAddWallet(false);
+    }
+  };
+
+  // Check if item is the single default
+  const isDefault = (id: string, type: 'wallet' | 'bank') => {
+    return defaultAccountId === id && defaultAccountType === type;
+  };
+
+  // Add Wallet Modal
+  if (showAddWallet) {
+    return (
+      <div className="app-container">
+        <div className="page-wrapper">
+          <div className="flex justify-between items-center mb-6 animate-fade-in">
+            <h1 className="text-xl font-bold">Add Wallet</h1>
+            <button
+              onClick={() => {
+                setShowAddWallet(false);
+                setNewWalletName('');
+                setNewWalletAddress('');
+              }}
+              className="p-2 rounded-xl hover:bg-secondary transition-colors"
+            >
+              <X className="w-5 h-5 text-muted-foreground" />
+            </button>
+          </div>
+
+          <div className="flex-1 animate-slide-up space-y-4">
+            <div className="card-container space-y-4">
+              <div>
+                <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
+                  Wallet Name
+                </label>
+                <input
+                  type="text"
+                  value={newWalletName}
+                  onChange={(e) => setNewWalletName(e.target.value)}
+                  placeholder="e.g. Trading Wallet"
+                  className="input-modern"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
+                  Wallet Address
+                </label>
+                <input
+                  type="text"
+                  value={newWalletAddress}
+                  onChange={(e) => setNewWalletAddress(e.target.value)}
+                  placeholder="0x..."
+                  className="input-modern font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleAddWallet}
+            className="btn-primary mt-6"
+            disabled={!newWalletName.trim() || !newWalletAddress.trim()}
+          >
+            Add Wallet
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Add Bank Modal
+  if (showAddBank) {
     return (
       <>
-        {/* QR Scanner Modal */}
         <QRScanner
           isOpen={showScanner}
           onClose={() => setShowScanner(false)}
@@ -87,12 +171,11 @@ const Settings = () => {
 
         <div className="app-container">
           <div className="page-wrapper">
-            {/* Header */}
             <div className="flex justify-between items-center mb-6 animate-fade-in">
-              <h1 className="text-xl font-bold">Link Bank Account</h1>
+              <h1 className="text-xl font-bold">Add Bank Account</h1>
               <button
                 onClick={() => {
-                  setShowLinkBank(false);
+                  setShowAddBank(false);
                   setScannedData(null);
                 }}
                 className="p-2 rounded-xl hover:bg-secondary transition-colors"
@@ -102,7 +185,6 @@ const Settings = () => {
             </div>
 
             <div className="flex-1 animate-slide-up">
-              {/* Scan Button */}
               <button
                 onClick={handleScanBankQR}
                 disabled={isScanning}
@@ -118,7 +200,6 @@ const Settings = () => {
                 </span>
               </button>
 
-              {/* Scanned Data Preview */}
               {scannedData && (
                 <div className="card-container animate-slide-up">
                   <div className="flex items-center gap-3 mb-4">
@@ -133,40 +214,31 @@ const Settings = () => {
                       <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
                         Bank Name
                       </label>
-                      <div className="input-modern bg-secondary">
-                        {scannedData.bankName}
-                      </div>
+                      <div className="input-modern bg-secondary">{scannedData.bankName}</div>
                     </div>
-
                     <div>
                       <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
                         Account Number
                       </label>
-                      <div className="input-modern bg-secondary font-mono">
-                        {scannedData.accountNumber}
-                      </div>
+                      <div className="input-modern bg-secondary font-mono">{scannedData.accountNumber}</div>
                     </div>
-
                     <div>
                       <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
                         Beneficiary Name
                       </label>
-                      <div className="input-modern bg-secondary">
-                        {scannedData.beneficiaryName}
-                      </div>
+                      <div className="input-modern bg-secondary">{scannedData.beneficiaryName}</div>
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Save Button */}
             <button
               onClick={handleSaveBank}
               className="btn-primary mt-6"
               disabled={!scannedData}
             >
-              Save Bank Account
+              Add Bank Account
             </button>
           </div>
         </div>
@@ -201,139 +273,166 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* Receiving Preferences Section - NEW */}
+        {/* 1. IDENTITY (KYC) SECTION */}
         <div className="mb-6 animate-slide-up">
           <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-3">
-            Receiving Preferences
+            Identity
           </h2>
-          <div className="card-container p-0 overflow-hidden">
-            {/* Option 1: Wallet */}
-            <button
-              onClick={() => setReceivingPreference('wallet')}
-              className={`w-full settings-row px-5 hover:bg-secondary transition-colors text-left ${receivingPreference === 'wallet' ? 'bg-success/5' : ''
-                }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${receivingPreference === 'wallet'
-                  ? 'bg-success/10 text-success'
-                  : 'bg-secondary text-muted-foreground'
-                  }`}>
-                  <Wallet className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">PayPath Wallet (SUI)</p>
-                  <p className="text-xs text-muted-foreground">Receive directly to your wallet</p>
-                </div>
+          <div className="card-container">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-warning/10 text-warning flex items-center justify-center">
+                <Shield className="w-6 h-6" />
               </div>
-              {receivingPreference === 'wallet' && (
-                <Check className="w-5 h-5 text-success" />
-              )}
-            </button>
-
-            {/* Option 2: Bank */}
-            <button
-              onClick={() => linkedBank && setReceivingPreference('bank')}
-              disabled={!linkedBank}
-              className={`w-full settings-row px-5 transition-colors text-left ${!linkedBank
-                ? 'opacity-50 cursor-not-allowed'
-                : receivingPreference === 'bank'
-                  ? 'bg-success/5 hover:bg-secondary'
-                  : 'hover:bg-secondary'
-                }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${receivingPreference === 'bank'
-                  ? 'bg-success/10 text-success'
-                  : 'bg-secondary text-muted-foreground'
-                  }`}>
-                  <Building2 className="w-5 h-5" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold">KYC Verification</p>
+                  <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-muted text-muted-foreground">
+                    Unverified
+                  </span>
                 </div>
-                <div>
-                  <p className="font-semibold text-sm">
-                    {linkedBank ? `${linkedBank.bankName} (****${linkedBank.accountNumber.slice(-4)})` : 'No Bank Linked'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {linkedBank ? 'Auto-convert SUI to VND' : 'Link a bank account first'}
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">Verify your identity for higher limits</p>
               </div>
-              {receivingPreference === 'bank' && linkedBank && (
-                <Check className="w-5 h-5 text-success" />
-              )}
+            </div>
+            <button
+              disabled
+              className="w-full mt-4 py-3 px-4 bg-muted text-muted-foreground rounded-xl font-medium text-sm cursor-not-allowed opacity-60 flex items-center justify-center gap-2"
+            >
+              <AlertCircle className="w-4 h-4" />
+              Verify Identity (Coming Soon)
             </button>
           </div>
-          <p className="text-xs text-muted-foreground mt-2 px-1">
-            When others send to your PayPath QR, funds will go to your selected destination.
-          </p>
         </div>
 
-        {/* Linked Bank Section */}
+        {/* 2. WALLETS SECTION */}
         <div className="mb-6 animate-slide-up">
           <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-3">
-            Linked Bank
+            Wallets (On-chain)
           </h2>
-
-          {linkedBank ? (
-            <div className="card-container">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-success/10 text-success flex items-center justify-center">
-                  <Building2 className="w-5 h-5" />
+          <div className="space-y-3">
+            {linkedWallets.map((wallet) => (
+              <div key={wallet.id} className={`card-container ${isDefault(wallet.id, 'wallet') ? 'ring-2 ring-success' : ''}`}>
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDefault(wallet.id, 'wallet') ? 'bg-success/10 text-success' : 'bg-secondary text-muted-foreground'
+                    }`}>
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-sm truncate">{wallet.name}</p>
+                      {isDefault(wallet.id, 'wallet') && (
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-success/10 text-success flex-shrink-0">
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground font-mono truncate">
+                      {wallet.address.length > 20
+                        ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`
+                        : wallet.address
+                      }
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {!isDefault(wallet.id, 'wallet') && (
+                      <button
+                        onClick={() => setDefaultAccount(wallet.id, 'wallet')}
+                        className="p-2 rounded-lg hover:bg-secondary transition-colors"
+                        title="Set as default"
+                      >
+                        <Star className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                    )}
+                    {linkedWallets.length > 1 && (
+                      <button
+                        onClick={() => removeLinkedWallet(wallet.id)}
+                        className="p-2 rounded-lg hover:bg-destructive/10 transition-colors"
+                        title="Remove wallet"
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-sm">{linkedBank.bankName}</p>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    ****{linkedBank.accountNumber.slice(-4)} • {linkedBank.beneficiaryName}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowLinkBank(true)}
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Change
-                </button>
               </div>
-            </div>
-          ) : (
+            ))}
+
             <button
-              onClick={() => setShowLinkBank(true)}
-              className="w-full card-container flex items-center justify-between hover:bg-secondary transition-colors cursor-pointer"
+              onClick={() => setShowAddWallet(true)}
+              className="w-full card-container flex items-center justify-center gap-2 hover:bg-secondary transition-colors cursor-pointer border-2 border-dashed border-border"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center">
-                  <Building2 className="w-5 h-5" />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-sm">Link Bank Account</p>
-                  <p className="text-xs text-muted-foreground">Enable bank receiving option</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              <Plus className="w-4 h-4 text-muted-foreground" />
+              <span className="font-medium text-sm text-muted-foreground">Add Another Wallet</span>
             </button>
-          )}
-        </div>
-
-        {/* Wallet Info */}
-        <div className="mb-6 animate-slide-up">
-          <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-3">
-            Wallet
-          </h2>
-          <div className="card-container p-0 overflow-hidden">
-            <div className="settings-row px-5">
-              <span className="text-muted-foreground text-sm">Address</span>
-              <span className="font-mono text-sm">
-                {walletAddress
-                  ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-                  : 'Not connected'}
-              </span>
-            </div>
-            <div className="settings-row px-5">
-              <span className="text-muted-foreground text-sm">Network</span>
-              <span className="text-sm font-medium">Sui Testnet</span>
-            </div>
           </div>
         </div>
 
-        {/* Actions */}
+        {/* 3. BANKS SECTION */}
+        <div className="mb-6 animate-slide-up">
+          <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-3">
+            Banks (Off-chain)
+          </h2>
+
+          <div className="space-y-3">
+            {linkedBanks.map((bank) => (
+              <div key={bank.id} className={`card-container ${isDefault(bank.id, 'bank') ? 'ring-2 ring-success' : ''}`}>
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDefault(bank.id, 'bank') ? 'bg-success/10 text-success' : 'bg-secondary text-muted-foreground'
+                    }`}>
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-sm">{bank.bankName}</p>
+                      {isDefault(bank.id, 'bank') && (
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-success/10 text-success flex-shrink-0">
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground font-mono truncate">
+                      ****{bank.accountNumber.slice(-4)} • {bank.beneficiaryName}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {!isDefault(bank.id, 'bank') && (
+                      <button
+                        onClick={() => setDefaultAccount(bank.id, 'bank')}
+                        className="p-2 rounded-lg hover:bg-secondary transition-colors"
+                        title="Set as default"
+                      >
+                        <Star className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => removeBankAccount(bank.id)}
+                      className="p-2 rounded-lg hover:bg-destructive/10 transition-colors"
+                      title="Remove bank"
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {linkedBanks.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Building2 className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No banks linked yet</p>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowAddBank(true)}
+              className="w-full card-container flex items-center justify-center gap-2 hover:bg-secondary transition-colors cursor-pointer border-2 border-dashed border-border"
+            >
+              <Plus className="w-4 h-4 text-muted-foreground" />
+              <span className="font-medium text-sm text-muted-foreground">Add New Bank</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 4. ACTIONS SECTION */}
         <div className="mb-6 animate-slide-up">
           <h2 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-3">
             Actions
@@ -374,7 +473,6 @@ const Settings = () => {
           </button>
         </div>
 
-        {/* Footer */}
         <p className="text-center text-xs text-muted-foreground mt-6">
           PayPath v1.0.0 • Built on Sui
         </p>

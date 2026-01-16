@@ -1,11 +1,19 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { useEffect } from 'react';
-import { Send, QrCode, ArrowDownLeft, ArrowUpRight, Settings } from 'lucide-react';
+import { Send, QrCode, ArrowDownLeft, ArrowUpRight, Settings, Wallet, Building2 } from 'lucide-react';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { username, balance, balanceUsd, transactions, isConnected } = useWallet();
+  const {
+    username,
+    balance,
+    balanceVnd,
+    transactions,
+    isConnected,
+    defaultAccountType,
+    getDefaultAccount,
+  } = useWallet();
 
   useEffect(() => {
     if (!isConnected || !username) {
@@ -26,6 +34,13 @@ const Dashboard = () => {
     return `${Math.floor(hours / 24)}d ago`;
   };
 
+  const formatVnd = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN').format(amount);
+  };
+
+  const defaultAccount = getDefaultAccount();
+  const isDefaultBank = defaultAccountType === 'bank';
+
   return (
     <div className="app-container">
       <div className="page-wrapper">
@@ -37,7 +52,7 @@ const Dashboard = () => {
             </div>
             <span className="font-semibold text-base">@{username}</span>
           </div>
-          <button 
+          <button
             onClick={() => navigate('/settings')}
             className="p-2.5 rounded-xl bg-card border border-border hover:bg-secondary transition-colors"
           >
@@ -47,22 +62,50 @@ const Dashboard = () => {
 
         {/* Balance Card */}
         <div className="balance-card mt-6 animate-slide-up">
+          {/* Default Account Indicator */}
+          {defaultAccount && (
+            <div className="flex items-center gap-2 mb-2">
+              {isDefaultBank ? (
+                <Building2 className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <Wallet className="w-4 h-4 text-muted-foreground" />
+              )}
+              <span className="text-xs text-muted-foreground">
+                {defaultAccount.name} • {isDefaultBank ? 'VND' : 'SUI'}
+              </span>
+            </div>
+          )}
+
           <p className="text-sm text-muted-foreground mb-1">Total Balance</p>
-          <p className="text-4xl font-bold tracking-tight">{balance.toFixed(2)} <span className="text-2xl text-muted-foreground">SUI</span></p>
-          <p className="text-muted-foreground text-base mt-1">≈ ${balanceUsd.toFixed(2)} USD</p>
+
+          {isDefaultBank ? (
+            <>
+              <p className="text-4xl font-bold tracking-tight">
+                {formatVnd(balanceVnd)} <span className="text-2xl text-muted-foreground">₫</span>
+              </p>
+              <p className="text-muted-foreground text-base mt-1">≈ {balance.toFixed(2)} SUI</p>
+            </>
+          ) : (
+            <>
+              <p className="text-4xl font-bold tracking-tight">
+                {balance.toFixed(2)} <span className="text-2xl text-muted-foreground">SUI</span>
+              </p>
+              <p className="text-muted-foreground text-base mt-1">≈ {formatVnd(balanceVnd)} ₫</p>
+            </>
+          )}
         </div>
 
         {/* Action Buttons */}
         <div className="flex gap-3 mt-6 animate-slide-up">
-          <button 
-            onClick={() => navigate('/send')} 
+          <button
+            onClick={() => navigate('/send')}
             className="action-btn"
           >
             <Send className="w-5 h-5" />
             <span>Send</span>
           </button>
-          <button 
-            onClick={() => navigate('/receive')} 
+          <button
+            onClick={() => navigate('/receive')}
             className="action-btn-secondary"
           >
             <QrCode className="w-5 h-5" />
@@ -80,16 +123,15 @@ const Dashboard = () => {
               View all
             </button>
           </div>
-          
+
           <div className="card-container p-0 overflow-hidden">
             {transactions.slice(0, 4).map((tx) => (
               <div key={tx.id} className="tx-item px-5 flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  tx.type === 'sent' 
-                    ? 'bg-destructive/10 text-destructive' 
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === 'sent'
+                    ? 'bg-destructive/10 text-destructive'
                     : 'bg-success/10 text-success'
-                }`}>
-                  {tx.type === 'sent' 
+                  }`}>
+                  {tx.type === 'sent'
                     ? <ArrowUpRight className="w-5 h-5" />
                     : <ArrowDownLeft className="w-5 h-5" />
                   }
@@ -101,9 +143,8 @@ const Dashboard = () => {
                   <p className="text-xs text-muted-foreground">{formatTime(tx.timestamp)}</p>
                 </div>
                 <div className="text-right">
-                  <p className={`font-semibold text-sm ${
-                    tx.type === 'sent' ? 'text-foreground' : 'text-success'
-                  }`}>
+                  <p className={`font-semibold text-sm ${tx.type === 'sent' ? 'text-foreground' : 'text-success'
+                    }`}>
                     {tx.type === 'sent' ? '-' : '+'}{tx.amount} SUI
                   </p>
                 </div>

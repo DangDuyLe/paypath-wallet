@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { Scan, Check, AlertTriangle, User, Building2, ChevronRight } from 'lucide-react';
+import { Scan, Check, AlertTriangle, User, Building2, ChevronRight, ChevronDown, Wallet } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
 
 type SendStep = 'input' | 'scan-result' | 'review' | 'success';
@@ -19,9 +19,28 @@ interface ScannedPayPathUser {
   avatar: string;
 }
 
+interface SourceAccount {
+  id: string;
+  type: 'wallet' | 'bank';
+  name: string;
+  detail: string;
+}
+
 const Send = () => {
   const navigate = useNavigate();
-  const { sendSui, balance, isConnected, username, lookupBankAccount, lookupUsername, addContact } = useWallet();
+  const {
+    sendSui,
+    balance,
+    isConnected,
+    username,
+    lookupBankAccount,
+    lookupUsername,
+    addContact,
+    linkedWallets,
+    linkedBanks,
+    defaultAccountId,
+    defaultAccountType,
+  } = useWallet();
 
   const [step, setStep] = useState<SendStep>('input');
   const [recipient, setRecipient] = useState('');
@@ -31,36 +50,86 @@ const Send = () => {
   // QR Scanner state
   const [showScanner, setShowScanner] = useState(false);
 
-  // Scan result state - simplified
+  // Scan result state
   const [scanResultType, setScanResultType] = useState<ScanResultType | null>(null);
   const [scannedUser, setScannedUser] = useState<ScannedPayPathUser | null>(null);
   const [scannedBank, setScannedBank] = useState<ScannedBank | null>(null);
   const [saveToContacts, setSaveToContacts] = useState(false);
+
+  // Source account selection
+  const [showSourcePicker, setShowSourcePicker] = useState(false);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(defaultAccountId);
+  const [selectedSourceType, setSelectedSourceType] = useState<'wallet' | 'bank'>(defaultAccountType);
+
+  // Recipient validation state
+  const [isCheckingRecipient, setIsCheckingRecipient] = useState(false);
+  const [recipientVerified, setRecipientVerified] = useState<boolean | null>(null);
+  const [verifiedRecipient, setVerifiedRecipient] = useState<ScannedPayPathUser | null>(null);
 
   if (!isConnected || !username) {
     navigate('/');
     return null;
   }
 
+  // Build source accounts list
+  const sourceAccounts: SourceAccount[] = [
+    ...linkedWallets.map(w => ({
+      id: w.id,
+      type: 'wallet' as const,
+      name: w.name,
+      detail: w.address.length > 20 ? `${w.address.slice(0, 6)}...${w.address.slice(-4)}` : w.address,
+    })),
+    ...linkedBanks.map(b => ({
+      id: b.id,
+      type: 'bank' as const,
+      name: b.bankName,
+      detail: `****${b.accountNumber.slice(-4)}`,
+    })),
+  ];
+
+  const selectedSource = sourceAccounts.find(
+    s => s.id === selectedSourceId && s.type === selectedSourceType
+  ) || sourceAccounts[0];
+
   const fee = 0.01;
+
+  // Check if recipient username exists
+  const checkRecipient = () => {
+    if (!recipient || recipient.length < 2) return;
+
+    setIsCheckingRecipient(true);
+    setError('');
+
+    // Simulate API call delay
+    setTimeout(() => {
+      const cleanUsername = recipient.replace('@', '');
+      const user = lookupUsername(cleanUsername);
+
+      if (user) {
+        setRecipientVerified(true);
+        setVerifiedRecipient({
+          username: user.username,
+          avatar: user.avatar || user.username.charAt(0).toUpperCase(),
+        });
+      } else {
+        setRecipientVerified(false);
+        setVerifiedRecipient(null);
+      }
+      setIsCheckingRecipient(false);
+    }, 500);
+  };
 
   const handleScanQR = () => {
     setShowScanner(true);
   };
 
-  // Called when QR is scanned - backend team will implement actual parsing
   const handleQRScanned = (rawData: string) => {
     setShowScanner(false);
     console.log('QR Data received:', rawData);
 
-    // TODO: Backend team will parse rawData here
-    // Check if it's a PayPath QR (paypath:@username) or a VietQR (bank)
-
-    // Simulate detection - in production, parse rawData format
     const isPayPathQR = Math.random() > 0.5;
 
     if (isPayPathQR) {
-      // PayPath QR - just show username, system handles routing
       const mockUsername = 'duy3000';
       const user = lookupUsername(mockUsername);
 
@@ -72,18 +141,15 @@ const Send = () => {
       setScannedBank(null);
       setStep('scan-result');
     } else {
-      // VietQR (Bank QR) - external transfer
       const mockBank: ScannedBank = {
         bankName: 'Sacombank',
         accountNumber: '5555666677778888',
         beneficiaryName: 'LE VAN C',
       };
 
-      // Check if this bank account belongs to a PayPath user
       const registeredUser = lookupBankAccount(mockBank.accountNumber);
 
       if (registeredUser) {
-        // Bank belongs to a PayPath user - treat as PayPath transfer
         setScannedUser({
           username: registeredUser.username,
           avatar: registeredUser.avatar || registeredUser.username.charAt(0).toUpperCase(),
@@ -91,7 +157,6 @@ const Send = () => {
         setScanResultType('paypath-user');
         setScannedBank(null);
       } else {
-        // Unregistered bank - external transfer
         setScannedBank(mockBank);
         setScanResultType('external-bank');
         setScannedUser(null);
@@ -138,12 +203,17 @@ const Send = () => {
     setStep('success');
   };
 
-  // Scan Result Screen - SIMPLIFIED
+  const handleSelectSource = (account: SourceAccount) => {
+    setSelectedSourceId(account.id);
+    setSelectedSourceType(account.type);
+    setShowSourcePicker(false);
+  };
+
+  // Scan Result Screen
   if (step === 'scan-result') {
     return (
       <div className="app-container">
         <div className="page-wrapper">
-          {/* Header */}
           <div className="flex justify-between items-center mb-6 animate-fade-in">
             <h1 className="text-xl font-bold">QR Scanned</h1>
             <button
@@ -154,9 +224,7 @@ const Send = () => {
             </button>
           </div>
 
-          {/* Result Card */}
           <div className="flex-1 animate-slide-up">
-            {/* PayPath User - Simple display */}
             {scanResultType === 'paypath-user' && scannedUser && (
               <div className="card-container">
                 <div className="flex items-center gap-4 pb-4 border-b border-border">
@@ -174,7 +242,7 @@ const Send = () => {
 
                 <div className="mt-4 p-4 bg-secondary/50 rounded-xl">
                   <p className="text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">You send SUI</span> → System routes to recipient's preferred destination (Wallet or Bank)
+                    <span className="font-medium text-foreground">You send SUI</span> → System routes to recipient's preferred destination
                   </p>
                 </div>
 
@@ -192,7 +260,6 @@ const Send = () => {
               </div>
             )}
 
-            {/* External Bank - Warning */}
             {scanResultType === 'external-bank' && scannedBank && (
               <div className="card-container">
                 <div className="flex items-center gap-4 pb-4 border-b border-border">
@@ -234,7 +301,6 @@ const Send = () => {
             )}
           </div>
 
-          {/* Continue Button */}
           <button
             onClick={proceedFromScanResult}
             className="btn-primary mt-6 flex items-center justify-center gap-2"
@@ -261,6 +327,9 @@ const Send = () => {
             <p className="text-muted-foreground">
               {amount} SUI to {recipient}
             </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              From: {selectedSource?.name}
+            </p>
           </div>
 
           <button onClick={() => navigate('/dashboard')} className="btn-primary animate-slide-up">
@@ -277,7 +346,6 @@ const Send = () => {
     return (
       <div className="app-container">
         <div className="page-wrapper">
-          {/* Header */}
           <div className="flex justify-between items-center mb-6 animate-fade-in">
             <h1 className="text-xl font-bold">Review</h1>
             <button
@@ -288,9 +356,19 @@ const Send = () => {
             </button>
           </div>
 
-          {/* Summary */}
           <div className="flex-1 animate-slide-up">
             <div className="card-container p-0 overflow-hidden">
+              <div className="settings-row px-5">
+                <span className="text-muted-foreground">From</span>
+                <div className="flex items-center gap-2">
+                  {selectedSource?.type === 'wallet' ? (
+                    <Wallet className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <Building2 className="w-4 h-4 text-muted-foreground" />
+                  )}
+                  <span className="font-semibold">{selectedSource?.name}</span>
+                </div>
+              </div>
               <div className="settings-row px-5">
                 <span className="text-muted-foreground">To</span>
                 <span className="font-semibold">{recipient}</span>
@@ -319,7 +397,6 @@ const Send = () => {
             </div>
           </div>
 
-          {/* Confirm Button */}
           <button onClick={handleConfirm} className="btn-primary mt-6 animate-slide-up">
             Confirm & Send
           </button>
@@ -330,7 +407,6 @@ const Send = () => {
 
   return (
     <>
-      {/* QR Scanner Modal */}
       <QRScanner
         isOpen={showScanner}
         onClose={() => setShowScanner(false)}
@@ -340,7 +416,6 @@ const Send = () => {
 
       <div className="app-container">
         <div className="page-wrapper">
-          {/* Header */}
           <div className="flex justify-between items-center mb-6 animate-fade-in">
             <h1 className="text-xl font-bold">Send SUI</h1>
             <button
@@ -351,8 +426,64 @@ const Send = () => {
             </button>
           </div>
 
-          {/* Inputs */}
           <div className="space-y-4 flex-1 animate-slide-up">
+            {/* Source Account Selector */}
+            <div className="relative">
+              <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
+                Send From
+              </label>
+              <button
+                onClick={() => setShowSourcePicker(!showSourcePicker)}
+                className="w-full card-container flex items-center justify-between hover:bg-secondary transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${selectedSource?.type === 'wallet' ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success'
+                    }`}>
+                    {selectedSource?.type === 'wallet' ? (
+                      <Wallet className="w-5 h-5" />
+                    ) : (
+                      <Building2 className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-sm">{selectedSource?.name}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{selectedSource?.detail}</p>
+                  </div>
+                </div>
+                <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${showSourcePicker ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown */}
+              {showSourcePicker && (
+                <div className="absolute top-full left-0 right-0 z-10 mt-2 card-container p-2 shadow-lg border border-border max-h-60 overflow-y-auto">
+                  {sourceAccounts.map((account) => (
+                    <button
+                      key={`${account.type}-${account.id}`}
+                      onClick={() => handleSelectSource(account)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-lg hover:bg-secondary transition-colors ${account.id === selectedSourceId && account.type === selectedSourceType ? 'bg-secondary' : ''
+                        }`}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${account.type === 'wallet' ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success'
+                        }`}>
+                        {account.type === 'wallet' ? (
+                          <Wallet className="w-4 h-4" />
+                        ) : (
+                          <Building2 className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="text-left flex-1">
+                        <p className="font-medium text-sm">{account.name}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{account.detail}</p>
+                      </div>
+                      {account.id === selectedSourceId && account.type === selectedSourceType && (
+                        <Check className="w-4 h-4 text-success" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Scan QR Button */}
             <button
               onClick={handleScanQR}
@@ -376,21 +507,67 @@ const Send = () => {
               <div className="flex-1 h-px bg-border" />
             </div>
 
+
             <div className="card-container space-y-4">
               <div>
                 <label className="text-xs font-semibold tracking-wide uppercase text-muted-foreground mb-2 block">
                   Recipient
                 </label>
-                <input
-                  type="text"
-                  value={recipient}
-                  onChange={(e) => {
-                    setRecipient(e.target.value);
-                    setError('');
-                  }}
-                  placeholder="@username"
-                  className="input-modern"
-                />
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={recipient}
+                      onChange={(e) => {
+                        setRecipient(e.target.value);
+                        setRecipientVerified(null);
+                        setVerifiedRecipient(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          checkRecipient();
+                        }
+                      }}
+                      placeholder="@username"
+                      className={`input-modern w-full pr-10 ${recipientVerified === true ? 'border-success' :
+                        recipientVerified === false ? 'border-destructive' : ''
+                        }`}
+                    />
+                    {/* Inline status icon */}
+                    {recipientVerified === true && (
+                      <Check className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-success" />
+                    )}
+                    {recipientVerified === false && (
+                      <AlertTriangle className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-destructive" />
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={checkRecipient}
+                    disabled={!recipient || recipient.length < 2 || isCheckingRecipient}
+                    className="px-4 py-3.5 bg-secondary text-foreground font-medium rounded-xl border border-border hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCheckingRecipient ? (
+                      <span className="animate-pulse">...</span>
+                    ) : (
+                      'Check'
+                    )}
+                  </button>
+                </div>
+
+                {/* Inline validation message */}
+                {recipientVerified === true && verifiedRecipient && (
+                  <p className="text-xs text-success mt-1.5 flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    Found: @{verifiedRecipient.username}
+                  </p>
+                )}
+                {recipientVerified === false && (
+                  <p className="text-xs text-destructive mt-1.5">
+                    User not found. Please check the username.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -404,6 +581,11 @@ const Send = () => {
                     onChange={(e) => {
                       setAmount(e.target.value);
                       setError('');
+                    }}
+                    onFocus={() => {
+                      if (recipient && recipient.length >= 2 && recipientVerified === null) {
+                        checkRecipient();
+                      }
                     }}
                     placeholder="0.00"
                     className="input-modern flex-1"
@@ -428,7 +610,6 @@ const Send = () => {
             )}
           </div>
 
-          {/* Continue Button */}
           <button
             onClick={validateAndProceed}
             className="btn-primary mt-6"
