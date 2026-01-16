@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { ChevronRight, Building2, Scan, Check, X, Loader2, LogOut, History, HelpCircle, Key, Wallet } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
+import { useDisconnectWallet } from '@mysten/dapp-kit';
 
 interface ScannedBankData {
   bankName: string;
@@ -12,6 +13,7 @@ interface ScannedBankData {
 
 const Settings = () => {
   const navigate = useNavigate();
+  const { mutate: disconnectSuiWallet } = useDisconnectWallet();
   const {
     username,
     disconnect,
@@ -34,8 +36,11 @@ const Settings = () => {
   }
 
   const handleDisconnect = () => {
+    // Disconnect Sui wallet from dapp-kit
+    disconnectSuiWallet();
+    // Disconnect from our app context
     disconnect();
-    navigate('/');
+    navigate('/login');
   };
 
   const handleScanBankQR = () => {
@@ -210,8 +215,8 @@ const Settings = () => {
             >
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${receivingPreference === 'wallet'
-                    ? 'bg-success/10 text-success'
-                    : 'bg-secondary text-muted-foreground'
+                  ? 'bg-success/10 text-success'
+                  : 'bg-secondary text-muted-foreground'
                   }`}>
                   <Wallet className="w-5 h-5" />
                 </div>
@@ -230,16 +235,16 @@ const Settings = () => {
               onClick={() => linkedBank && setReceivingPreference('bank')}
               disabled={!linkedBank}
               className={`w-full settings-row px-5 transition-colors text-left ${!linkedBank
-                  ? 'opacity-50 cursor-not-allowed'
-                  : receivingPreference === 'bank'
-                    ? 'bg-success/5 hover:bg-secondary'
-                    : 'hover:bg-secondary'
+                ? 'opacity-50 cursor-not-allowed'
+                : receivingPreference === 'bank'
+                  ? 'bg-success/5 hover:bg-secondary'
+                  : 'hover:bg-secondary'
                 }`}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${receivingPreference === 'bank'
-                    ? 'bg-success/10 text-success'
-                    : 'bg-secondary text-muted-foreground'
+                  ? 'bg-success/10 text-success'
+                  : 'bg-secondary text-muted-foreground'
                   }`}>
                   <Building2 className="w-5 h-5" />
                 </div>

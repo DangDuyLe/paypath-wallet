@@ -1,20 +1,39 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { connectWallet, isConnected } = useWallet();
+  const { connectWallet, isConnected, username } = useWallet();
   const currentAccount = useCurrentAccount();
+  const [hasClickedConnect, setHasClickedConnect] = useState(false);
 
-  // When Sui wallet connects, update our app state and navigate
+  // Only navigate when user explicitly clicks connect AND account is available
   useEffect(() => {
-    if (currentAccount && !isConnected) {
+    if (currentAccount && hasClickedConnect) {
       connectWallet(currentAccount.address);
-      navigate('/onboarding');
+      // If user already has username (returning user), go to dashboard
+      // Otherwise go to onboarding
+      if (username) {
+        navigate('/dashboard');
+      } else {
+        navigate('/onboarding');
+      }
     }
-  }, [currentAccount, isConnected, connectWallet, navigate]);
+  }, [currentAccount, hasClickedConnect, connectWallet, navigate, username]);
+
+  // If already connected with username, go to dashboard
+  useEffect(() => {
+    if (isConnected && username) {
+      navigate('/dashboard');
+    }
+  }, [isConnected, username, navigate]);
+
+  // Wrap the ConnectButton to detect when user clicks
+  const handleConnectClick = () => {
+    setHasClickedConnect(true);
+  };
 
   return (
     <div className="app-container">
@@ -31,7 +50,7 @@ const Login = () => {
         </div>
 
         {/* Connect Button - uses @mysten/dapp-kit */}
-        <div className="animate-slide-up">
+        <div className="animate-slide-up" onClick={handleConnectClick}>
           <div className="sui-connect-wrapper">
             <ConnectButton />
           </div>
