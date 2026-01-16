@@ -46,6 +46,7 @@ const registeredUsers: Record<string, PayPathUser> = {
 
 interface WalletState {
   isConnected: boolean;
+  walletAddress: string | null;
   username: string | null;
   balance: number;
   balanceUsd: number;
@@ -55,7 +56,7 @@ interface WalletState {
 }
 
 interface WalletContextType extends WalletState {
-  connectWallet: () => void;
+  connectWallet: (address?: string) => void;
   setUsername: (username: string) => void;
   sendSui: (to: string, amount: number, isOffRamp?: boolean) => void;
   disconnect: () => void;
@@ -75,6 +76,7 @@ const mockTransactions: Transaction[] = [
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<WalletState>({
     isConnected: false,
+    walletAddress: null,
     username: null,
     balance: 125.50,
     balanceUsd: 150.00,
@@ -83,8 +85,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     contacts: ['@alice', '@bob'],
   });
 
-  const connectWallet = () => {
-    setState(prev => ({ ...prev, isConnected: true }));
+  const connectWallet = (address?: string) => {
+    setState(prev => ({
+      ...prev,
+      isConnected: true,
+      walletAddress: address || null,
+    }));
   };
 
   const setUsername = (username: string) => {
@@ -111,6 +117,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const disconnect = () => {
     setState({
       isConnected: false,
+      walletAddress: null,
       username: null,
       balance: 125.50,
       balanceUsd: 150.00,
@@ -127,8 +134,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const addContact = (username: string) => {
     setState(prev => ({
       ...prev,
-      contacts: prev.contacts.includes(username) 
-        ? prev.contacts 
+      contacts: prev.contacts.includes(username)
+        ? prev.contacts
         : [...prev.contacts, username],
     }));
   };
@@ -138,11 +145,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <WalletContext.Provider value={{ 
-      ...state, 
-      connectWallet, 
-      setUsername, 
-      sendSui, 
+    <WalletContext.Provider value={{
+      ...state,
+      connectWallet,
+      setUsername,
+      sendSui,
       disconnect,
       linkBankAccount,
       addContact,

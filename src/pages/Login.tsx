@@ -1,14 +1,20 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
+import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
+import { useEffect } from 'react';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { connectWallet } = useWallet();
+  const { connectWallet, isConnected } = useWallet();
+  const currentAccount = useCurrentAccount();
 
-  const handleConnect = () => {
-    connectWallet();
-    navigate('/onboarding');
-  };
+  // When Sui wallet connects, update our app state and navigate
+  useEffect(() => {
+    if (currentAccount && !isConnected) {
+      connectWallet(currentAccount.address);
+      navigate('/onboarding');
+    }
+  }, [currentAccount, isConnected, connectWallet, navigate]);
 
   return (
     <div className="app-container">
@@ -19,13 +25,16 @@ const Login = () => {
         {/* Logo */}
         <div className="text-center animate-fade-in">
           <h1 className="text-4xl font-black tracking-tight">PayPath.</h1>
+          <p className="text-muted-foreground text-sm mt-2">
+            Sui Blockchain Wallet
+          </p>
         </div>
 
-        {/* Connect Button */}
+        {/* Connect Button - uses @mysten/dapp-kit */}
         <div className="animate-slide-up">
-          <button onClick={handleConnect} className="btn-primary">
-            Connect Wallet
-          </button>
+          <div className="sui-connect-wrapper">
+            <ConnectButton />
+          </div>
         </div>
       </div>
     </div>

@@ -12,7 +12,7 @@ interface ScannedBankData {
 
 const Settings = () => {
   const navigate = useNavigate();
-  const { username, disconnect, isConnected, linkedBank, linkBankAccount } = useWallet();
+  const { username, disconnect, isConnected, linkedBank, linkBankAccount, walletAddress } = useWallet();
   const [showLinkBank, setShowLinkBank] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -239,11 +239,15 @@ const Settings = () => {
           <div className="card-container p-0 overflow-hidden">
             <div className="settings-row px-5">
               <span className="text-muted-foreground text-sm">Address</span>
-              <span className="font-mono text-sm">0x7a3b...f92d</span>
+              <span className="font-mono text-sm">
+                {walletAddress
+                  ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+                  : 'Not connected'}
+              </span>
             </div>
             <div className="settings-row px-5">
               <span className="text-muted-foreground text-sm">Network</span>
-              <span className="text-sm font-medium">Sui Mainnet</span>
+              <span className="text-sm font-medium">Sui Testnet</span>
             </div>
           </div>
         </div>
