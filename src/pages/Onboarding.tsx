@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 
@@ -9,13 +9,18 @@ const Onboarding = () => {
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(false);
 
-  if (!isConnected) {
-    navigate('/');
-    return null;
-  }
+  useEffect(() => {
+    if (!isConnected) {
+      navigate('/', { replace: true });
+      return;
+    }
 
-  if (existingUsername) {
-    navigate('/dashboard');
+    if (existingUsername) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isConnected, existingUsername, navigate]);
+
+  if (!isConnected || existingUsername) {
     return null;
   }
 

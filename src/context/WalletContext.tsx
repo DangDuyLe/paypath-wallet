@@ -265,10 +265,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Auto-refresh balance when account connects or changes
   useEffect(() => {
-    if (currentAccount?.address && state.isConnected) {
+    if (currentAccount?.address) {
       refreshBalance();
     }
-  }, [currentAccount?.address, state.isConnected, refreshBalance]);
+  }, [currentAccount?.address, refreshBalance]);
 
   // Validate wallet address format (0x followed by 64 hex chars)
   const isValidWalletAddress = (address: string): boolean => {
