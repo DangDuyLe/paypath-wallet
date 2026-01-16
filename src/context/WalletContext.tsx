@@ -7,7 +7,42 @@ interface Transaction {
   from?: string;
   amount: number;
   timestamp: Date;
+  isOffRamp?: boolean;
 }
+
+interface LinkedBank {
+  bankName: string;
+  accountNumber: string;
+  beneficiaryName: string;
+}
+
+interface PayPathUser {
+  username: string;
+  avatar?: string;
+  linkedBank?: LinkedBank;
+}
+
+// Mock registered users database
+const registeredUsers: Record<string, PayPathUser> = {
+  '1234567890': {
+    username: 'duy3000',
+    avatar: 'D',
+    linkedBank: {
+      bankName: 'Vietcombank',
+      accountNumber: '1234567890',
+      beneficiaryName: 'NGUYEN VAN A',
+    },
+  },
+  '0987654321': {
+    username: 'alice_sui',
+    avatar: 'A',
+    linkedBank: {
+      bankName: 'Techcombank',
+      accountNumber: '0987654321',
+      beneficiaryName: 'TRAN THI B',
+    },
+  },
+};
 
 interface WalletState {
   isConnected: boolean;
@@ -15,13 +50,18 @@ interface WalletState {
   balance: number;
   balanceUsd: number;
   transactions: Transaction[];
+  linkedBank: LinkedBank | null;
+  contacts: string[];
 }
 
 interface WalletContextType extends WalletState {
   connectWallet: () => void;
   setUsername: (username: string) => void;
-  sendSui: (to: string, amount: number) => void;
+  sendSui: (to: string, amount: number, isOffRamp?: boolean) => void;
   disconnect: () => void;
+  linkBankAccount: (bank: LinkedBank) => void;
+  addContact: (username: string) => void;
+  lookupBankAccount: (accountNumber: string) => PayPathUser | null;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -39,6 +79,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     balance: 125.50,
     balanceUsd: 150.00,
     transactions: mockTransactions,
+    linkedBank: null,
+    contacts: ['@alice', '@bob'],
   });
 
   const connectWallet = () => {
@@ -49,17 +91,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, username }));
   };
 
-  const sendSui = (to: string, amount: number) => {
+  const sendSui = (to: string, amount: number, isOffRamp?: boolean) => {
     const newTransaction: Transaction = {
       id: Date.now().toString(),
       type: 'sent',
       to,
       amount,
       timestamp: new Date(),
+      isOffRamp,
     };
     setState(prev => ({
       ...prev,
-      balance: prev.balance - amount - 0.01, // Include fee
+      balance: prev.balance - amount - 0.01,
       balanceUsd: (prev.balance - amount - 0.01) * 1.2,
       transactions: [newTransaction, ...prev.transactions],
     }));
@@ -72,11 +115,39 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       balance: 125.50,
       balanceUsd: 150.00,
       transactions: mockTransactions,
+      linkedBank: null,
+      contacts: ['@alice', '@bob'],
     });
   };
 
+  const linkBankAccount = (bank: LinkedBank) => {
+    setState(prev => ({ ...prev, linkedBank: bank }));
+  };
+
+  const addContact = (username: string) => {
+    setState(prev => ({
+      ...prev,
+      contacts: prev.contacts.includes(username) 
+        ? prev.contacts 
+        : [...prev.contacts, username],
+    }));
+  };
+
+  const lookupBankAccount = (accountNumber: string): PayPathUser | null => {
+    return registeredUsers[accountNumber] || null;
+  };
+
   return (
-    <WalletContext.Provider value={{ ...state, connectWallet, setUsername, sendSui, disconnect }}>
+    <WalletContext.Provider value={{ 
+      ...state, 
+      connectWallet, 
+      setUsername, 
+      sendSui, 
+      disconnect,
+      linkBankAccount,
+      addContact,
+      lookupBankAccount,
+    }}>
       {children}
     </WalletContext.Provider>
   );
