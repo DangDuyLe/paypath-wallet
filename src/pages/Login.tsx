@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
-import { useEffect, useState } from 'react';
+import { ConnectButton, useCurrentAccount, useConnectWallet, useWallets } from '@mysten/dapp-kit';
+import { useEffect, useState, useCallback } from 'react';
 
 // Detect if user is on mobile device
 const isMobileDevice = (): boolean => {
@@ -12,21 +12,6 @@ const isMobileDevice = (): boolean => {
   return mobileRegex.test(userAgent.toLowerCase()) || isSmallScreen;
 };
 
-// Get current page URL for callback after wallet connection
-const getCurrentUrl = (): string => {
-  if (typeof window === 'undefined') return '';
-  return window.location.href;
-};
-
-// Open Slush Wallet app using deeplink
-// Try suiwallet://dapp?url= format to open in-app browser
-const openSlushWallet = () => {
-  const currentUrl = getCurrentUrl();
-  // Try different deeplink formats
-  const deepLink = `suiwallet://browse?url=${encodeURIComponent(currentUrl)}`;
-  window.location.href = deepLink;
-};
-
 const Login = () => {
   const navigate = useNavigate();
   const { connectWallet, isConnected, username } = useWallet();
@@ -34,9 +19,32 @@ const Login = () => {
   const [hasClickedConnect, setHasClickedConnect] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
+  const wallets = useWallets();
+  const { mutate: connect } = useConnectWallet();
+
   useEffect(() => {
     setIsMobile(isMobileDevice());
   }, []);
+
+  // Handle mobile wallet connection with deeplink
+  const handleMobileConnect = useCallback(() => {
+    // Find Sui Wallet / Slush wallet
+    const suiWallet = wallets.find(
+      (w) => w.name.toLowerCase().includes('sui') || w.name.toLowerCase().includes('slush')
+    );
+
+    if (suiWallet) {
+      // Connect directly if wallet is available
+      connect({ wallet: suiWallet });
+    } else {
+      // Open deeplink to Slush Wallet - it will handle the connection
+      const currentUrl = encodeURIComponent(window.location.href);
+      // Format: suiwallet://wc?uri= - but we need actual WC URI
+      // For now, just open the wallet and let user connect from there
+      window.location.href = `suiwallet://`;
+    }
+    setHasClickedConnect(true);
+  }, [wallets, connect]);
 
   useEffect(() => {
     if (currentAccount && hasClickedConnect) {
@@ -79,7 +87,7 @@ const Login = () => {
             <>
               {/* Mobile: Show Open in App button */}
               <button
-                onClick={openSlushWallet}
+                onClick={handleMobileConnect}
                 className="btn-primary w-full"
               >
                 Open in Slush Wallet
