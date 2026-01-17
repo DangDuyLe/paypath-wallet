@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 import { ConnectButton, useCurrentAccount, useDisconnectWallet } from '@mysten/dapp-kit';
 import { useEffect, useState } from 'react';
 import { Copy, Check, LogOut, Wallet, ChevronRight } from 'lucide-react';
@@ -28,6 +29,8 @@ const Login = () => {
   const [isInWalletBrowser, setIsInWalletBrowser] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showWalletOptions, setShowWalletOptions] = useState(false);
+  const { loginWithWallet, isAuthLoading } = useAuth();
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMobile(isMobileDevice());
@@ -60,14 +63,14 @@ const Login = () => {
     setHasClickedConnect(true);
   };
 
-  const handleContinueWithWallet = () => {
-    if (currentAccount) {
-      connectWallet(currentAccount.address);
-      if (username) {
-        navigate('/dashboard');
-      } else {
-        navigate('/onboarding');
-      }
+  const handleAuthLogin = async () => {
+    setAuthError(null);
+    try {
+      await loginWithWallet();
+      navigate('/dashboard');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Login failed';
+      setAuthError(message);
     }
   };
 
@@ -167,10 +170,11 @@ const Login = () => {
               </div>
 
               <button
-                onClick={handleContinueWithWallet}
+                onClick={handleAuthLogin}
+                disabled={isAuthLoading}
                 className="btn-primary flex items-center justify-center gap-2"
               >
-                Continue to App
+                {isAuthLoading ? 'Signing...' : 'Continue to App'}
                 <ChevronRight className="w-4 h-4" />
               </button>
 
