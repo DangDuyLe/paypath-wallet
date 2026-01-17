@@ -2,9 +2,9 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { useSignAndExecuteTransaction, useSuiClient, useCurrentAccount } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 
-// Testnet USDC via Aftermath Faucet
-const USDC_COIN_TYPE = "0xcdd397f2cffb7f5d439f56fc01afe5585c5f06e3bcd2ee3a21753c566de313d9::usdc::USDC";
-const USDC_DECIMALS = 9; // Testnet Faucet USDC typically has 9 decimals
+// Official Native USDC on Sui Mainnet
+const USDC_COIN_TYPE = "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC";
+const USDC_DECIMALS = 6; // Mainnet USDC has 6 decimals
 
 interface TransactionRecord {
   id: string;
@@ -94,7 +94,7 @@ interface WalletState {
 interface WalletContextType extends WalletState {
   connectWallet: (address?: string) => void;
   setUsername: (username: string) => void;
-  sendUsdc: (toAddress: string, amount: number) => Promise<{ success: boolean; digest?: string }>;
+  sendUsdc: (toAddress: string, amount: number, memo?: string) => Promise<{ success: boolean; digest?: string }>;
   disconnect: () => void;
   addBankAccount: (bank: Omit<LinkedBank, 'id'>) => void;
   removeBankAccount: (id: string) => void;
@@ -311,7 +311,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   // Send USDC Token - Returns the REAL transaction digest
-  const sendUsdc = async (toAddress: string, amount: number): Promise<{ success: boolean; digest?: string }> => {
+  const sendUsdc = async (toAddress: string, amount: number, memo?: string): Promise<{ success: boolean; digest?: string }> => {
     if (!currentAccount?.address) {
       console.error('No wallet connected');
       return { success: false };
@@ -346,6 +346,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const [coinToSend] = tx.splitCoins(tx.object(primaryCoin.coinObjectId), [
         tx.pure.u64(amountInSmallestUnit),
       ]);
+
+      // Add memo to transaction inputs if provided
+      if (memo) {
+        tx.pure.string(memo);
+      }
 
       // Transfer to recipient
       tx.transferObjects([coinToSend], tx.pure.address(toAddress));
