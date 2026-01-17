@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2 } from 'lucide-react';
+import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2, Info } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
 import * as gaian from '@/services/gaian';
 
@@ -354,12 +354,27 @@ const Send = () => {
                 <span className="font-medium">{amount} USDC</span>
               </div>
               <div className="row-item px-4">
-                <span className="text-muted-foreground">Gas Fee</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground">Service Fee (0.2%)</span>
+                  <div className="relative group">
+                    <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                      Platform processing fee
+                    </div>
+                  </div>
+                </div>
+                <span className="font-medium">{(parseFloat(amount) * 0.002).toFixed(4)} USDC</span>
+              </div>
+              <div className="row-item px-4">
+                <span className="text-muted-foreground">Network Fee</span>
                 <span className="font-medium">~{fee} SUI</span>
               </div>
               <div className="row-item px-4 bg-secondary">
-                <span className="font-bold">Total</span>
-                <span className="font-bold">{amount} USDC + ~{fee} SUI</span>
+                <span className="font-bold">Total to Pay</span>
+                <div className="text-right">
+                  <p className="font-bold">{(parseFloat(amount) + parseFloat(amount) * 0.002).toFixed(2)} USDC</p>
+                  <p className="text-xs text-muted-foreground">+ ~{fee} SUI gas</p>
+                </div>
               </div>
             </div>
           </div>
