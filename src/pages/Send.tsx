@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2, Info, X, User } from 'lucide-react';
+import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2, X, User, AlertCircle, CreditCard, Copy } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
 import * as gaian from '@/services/gaian';
 
@@ -14,6 +14,8 @@ interface ExternalBankInfo {
   accountNumber: string;
   beneficiaryName: string;
   amount?: number;
+  isLinkedToPayPath?: boolean;
+  linkedUsername?: string;
 }
 
 const Send = () => {
@@ -25,6 +27,7 @@ const Send = () => {
     isConnected,
     username,
     lookupUsername,
+    lookupBankAccount,
     linkedWallets,
     linkedBanks,
     defaultAccountId,
@@ -51,6 +54,7 @@ const Send = () => {
   const [scanResult, setScanResult] = useState<ScanResult>('none');
   const [isParsing, setIsParsing] = useState(false);
   const [externalBank, setExternalBank] = useState<ExternalBankInfo | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   if (!isConnected || !username) {
     navigate('/');
@@ -64,6 +68,22 @@ const Send = () => {
 
   const selectedSource = allSources.find(s => s.id === selectedSourceId && s.type === selectedSourceType) || allSources[0];
   const fee = 0.001;
+
+  const handleSelectSource = (source: typeof allSources[0]) => {
+    setSelectedSourceId(source.id);
+    setSelectedSourceType(source.type);
+    setShowSourceMenu(false);
+  };
+
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   const checkRecipient = () => {
     const input = recipient.trim();
@@ -153,15 +173,27 @@ const Send = () => {
       const parsedBank = await gaian.parseQrString(qrString);
 
       if (parsedBank) {
+        // Check if this bank account is linked to a PayPath user
+        const linkedUser = lookupBankAccount(parsedBank.accountNumber);
+
         setExternalBank({
           bankName: parsedBank.bankName,
           accountNumber: parsedBank.accountNumber,
           beneficiaryName: parsedBank.beneficiaryName,
           amount: parsedBank.amount,
+          isLinkedToPayPath: !!linkedUser,
+          linkedUsername: linkedUser?.username,
         });
         setRecipient(`${parsedBank.beneficiaryName}`);
         setRecipientDisplayName(`${parsedBank.beneficiaryName} (${parsedBank.bankName})`);
         setScanResult('external');
+
+        // If linked to PayPath, use the wallet address
+        if (linkedUser && linkedUser.walletAddress) {
+          setRecipientValid(true);
+          setRecipientAddress(linkedUser.walletAddress);
+          setRecipientType('username');
+        }
 
         if (parsedBank.amount) {
           setAmount(parsedBank.amount.toString());
@@ -370,6 +402,63 @@ const Send = () => {
           </div>
 
           <div className="flex-1 space-y-4 animate-slide-up">
+            {/* Source Selector */}
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Pay From</label>
+              <div className="relative">
+                <button
+                  onClick={() => setShowSourceMenu(!showSourceMenu)}
+                  className="w-full card-modern flex items-center justify-between py-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`icon-circle ${selectedSource?.type === 'wallet' ? 'bg-blue-500/10' : 'bg-green-500/10'}`}>
+                      {selectedSource?.type === 'wallet'
+                        ? <Wallet className="w-4 h-4 text-blue-500" />
+                        : <Building2 className="w-4 h-4 text-green-500" />
+                      }
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium text-sm">{selectedSource?.name || 'Select Source'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedSource?.type === 'wallet' ? 'Wallet' : 'Bank Account'}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${showSourceMenu ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Source Dropdown */}
+                {showSourceMenu && (
+                  <div className="absolute top-full left-0 right-0 mt-2 card-modern z-10 py-1 max-h-60 overflow-y-auto">
+                    {allSources.map((source) => (
+                      <button
+                        key={`${source.type}-${source.id}`}
+                        onClick={() => handleSelectSource(source)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary transition-colors ${selectedSourceId === source.id && selectedSourceType === source.type ? 'bg-secondary' : ''
+                          }`}
+                      >
+                        <div className={`icon-circle ${source.type === 'wallet' ? 'bg-blue-500/10' : 'bg-green-500/10'}`}>
+                          {source.type === 'wallet'
+                            ? <Wallet className="w-4 h-4 text-blue-500" />
+                            : <Building2 className="w-4 h-4 text-green-500" />
+                          }
+                        </div>
+                        <div className="text-left flex-1">
+                          <p className="font-medium text-sm">{source.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {source.type === 'wallet' ? 'Wallet' : 'Bank Account'}
+                          </p>
+                        </div>
+                        {selectedSourceId === source.id && selectedSourceType === source.type && (
+                          <Check className="w-4 h-4 text-success" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Scan QR Button */}
             <button
               onClick={() => setShowScanner(true)}
@@ -387,36 +476,98 @@ const Send = () => {
               <div className="flex-1 h-px bg-border" />
             </div>
 
-            {/* Recipient Input */}
-            <div>
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Recipient</label>
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={recipient}
-                    onChange={(e) => {
-                      setRecipient(e.target.value);
-                      setRecipientValid(null);
-                      setError('');
-                    }}
-                    onBlur={checkRecipient}
-                    placeholder="@username or 0x..."
-                    className="input-modern pl-10"
-                    disabled={scanResult === 'external'}
-                  />
+            {/* External Bank Details Card */}
+            {scanResult === 'external' && externalBank && (
+              <div className="card-modern space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-muted-foreground" />
+                    <span className="font-semibold">Bank Transfer Details</span>
+                  </div>
+                  <button onClick={clearRecipient} className="text-muted-foreground hover:text-foreground">
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                {recipientValid === true && (
-                  <div className="w-11 h-11 rounded-xl bg-success/10 flex items-center justify-center">
-                    <Check className="w-5 h-5 text-success" />
+
+                {/* Outside Transfer Warning */}
+                {!externalBank.isLinkedToPayPath && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                    <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                    <span className="text-sm text-amber-500 font-medium">Outside Transfer - Not a PayPath user</span>
                   </div>
                 )}
+
+                {externalBank.isLinkedToPayPath && externalBank.linkedUsername && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-success/10 border border-success/30 rounded-xl">
+                    <Check className="w-4 h-4 text-success flex-shrink-0" />
+                    <span className="text-sm text-success font-medium">PayPath User: @{externalBank.linkedUsername}</span>
+                  </div>
+                )}
+
+                {/* Bank Name */}
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <span className="text-sm text-muted-foreground">Bank</span>
+                  <span className="font-medium text-sm">{externalBank.bankName}</span>
+                </div>
+
+                {/* Account Number */}
+                <div className="flex justify-between items-center py-2 border-b border-border">
+                  <span className="text-sm text-muted-foreground">Account No.</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm font-mono">{externalBank.accountNumber}</span>
+                    <button
+                      onClick={() => copyToClipboard(externalBank.accountNumber, 'account')}
+                      className="p-1 hover:bg-secondary rounded transition-colors"
+                    >
+                      {copiedField === 'account' ? (
+                        <Check className="w-3 h-3 text-success" />
+                      ) : (
+                        <Copy className="w-3 h-3 text-muted-foreground" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Beneficiary Name */}
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-muted-foreground">Recipient</span>
+                  <span className="font-medium text-sm">{externalBank.beneficiaryName}</span>
+                </div>
               </div>
-              {recipientDisplayName && recipientValid && (
-                <p className="text-sm text-success mt-2">Found: {recipientDisplayName}</p>
-              )}
-            </div>
+            )}
+
+            {/* Recipient Input - Only show if not external bank */}
+            {scanResult !== 'external' && (
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-2 block">Recipient</label>
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={recipient}
+                      onChange={(e) => {
+                        setRecipient(e.target.value);
+                        setRecipientValid(null);
+                        setError('');
+                      }}
+                      onBlur={checkRecipient}
+                      placeholder="@username or 0x..."
+                      className="input-modern pl-10"
+                      disabled={scanResult === 'external'}
+                    />
+                  </div>
+                  {recipientValid === true && (
+                    <div className="w-11 h-11 rounded-xl bg-success/10 flex items-center justify-center">
+                      <Check className="w-5 h-5 text-success" />
+                    </div>
+                  )}
+                </div>
+                {recipientDisplayName && recipientValid && (
+                  <p className="text-sm text-success mt-2">Found: {recipientDisplayName}</p>
+                )}
+              </div>
+            )}
 
             {/* Amount */}
             <div>
@@ -427,7 +578,16 @@ const Send = () => {
               <input
                 type="number"
                 value={amount}
-                onChange={(e) => { setAmount(e.target.value); setError(''); }}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Prevent negative values
+                  if (value === '' || parseFloat(value) >= 0) {
+                    setAmount(value);
+                  }
+                  setError('');
+                }}
+                step="0.01"
+                min="0"
                 placeholder="0.00"
                 className="input-modern text-xl font-semibold"
               />
@@ -439,9 +599,9 @@ const Send = () => {
             )}
           </div>
 
-          <button 
-            onClick={validate} 
-            disabled={!recipient || !amount}
+          <button
+            onClick={validate}
+            disabled={(!recipient && scanResult !== 'external') || !amount}
             className="btn-primary mt-6"
           >
             Continue

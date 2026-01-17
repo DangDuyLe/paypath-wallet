@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { useEffect } from 'react';
-import { ArrowLeft, ArrowDownLeft, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, ArrowDownLeft, ArrowUpRight, RefreshCw, Copy, Check } from 'lucide-react';
 
 const History = () => {
     const navigate = useNavigate();
@@ -12,6 +12,8 @@ const History = () => {
         isLoadingBalance,
         refreshBalance,
     } = useWallet();
+
+    const [copiedDigest, setCopiedDigest] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isConnected || !username) {
@@ -34,6 +36,16 @@ const History = () => {
         return date.toLocaleDateString('vi-VN');
     };
 
+    const copyDigest = async (digest: string) => {
+        try {
+            await navigator.clipboard.writeText(digest);
+            setCopiedDigest(digest);
+            setTimeout(() => setCopiedDigest(null), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
+    };
+
     return (
         <div className="app-container">
             <div className="page-wrapper">
@@ -42,7 +54,7 @@ const History = () => {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => navigate('/dashboard')}
-                            className="p-2 border border-border hover:bg-secondary transition-colors"
+                            className="p-2 border border-border rounded-xl hover:bg-secondary transition-colors"
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
@@ -51,7 +63,7 @@ const History = () => {
                     <button
                         onClick={refreshBalance}
                         disabled={isLoadingBalance}
-                        className="p-2 border border-border hover:bg-secondary transition-colors disabled:opacity-50"
+                        className="p-2 border border-border rounded-xl hover:bg-secondary transition-colors disabled:opacity-50"
                     >
                         <RefreshCw className={`w-5 h-5 ${isLoadingBalance ? 'animate-spin' : ''}`} />
                     </button>
@@ -69,29 +81,54 @@ const History = () => {
                             <p className="text-sm">Your USDC transactions will appear here</p>
                         </div>
                     ) : (
-                        <div className="border border-border">
-                            {transactions.map((tx) => (
-                                <div key={tx.id} className="row-item px-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 flex items-center justify-center ${tx.type === 'sent' ? 'bg-secondary' : 'bg-success/10'
-                                            }`}>
-                                            {tx.type === 'sent'
-                                                ? <ArrowUpRight className="w-5 h-5" />
-                                                : <ArrowDownLeft className="w-5 h-5 text-success" />
-                                            }
+                        <div className="card-modern space-y-1">
+                            {transactions.map((tx) => {
+                                // Use tx.id as digest (real blockchain txs store hash in id)
+                                const txHash = tx.digest || tx.id;
+                                const truncatedHash = txHash.length > 12
+                                    ? `${txHash.slice(0, 6)}...${txHash.slice(-4)}`
+                                    : txHash;
+
+                                return (
+                                    <div key={tx.id} className="flex items-center justify-between py-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`icon-circle ${tx.type === 'sent' ? 'bg-secondary' : 'bg-success/10'}`}>
+                                                {tx.type === 'sent'
+                                                    ? <ArrowUpRight className="w-5 h-5" />
+                                                    : <ArrowDownLeft className="w-5 h-5 text-success" />
+                                                }
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <p className="font-medium text-sm">
+                                                        {tx.type === 'sent' ? 'Sent' : 'Received'} USDC
+                                                    </p>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-xs text-muted-foreground">•</span>
+                                                        <span className="text-xs text-muted-foreground font-mono">{truncatedHash}</span>
+                                                        <button
+                                                            onClick={() => copyDigest(txHash)}
+                                                            className="p-0.5 hover:bg-secondary rounded transition-colors"
+                                                        >
+                                                            {copiedDigest === txHash ? (
+                                                                <Check className="w-3 h-3 text-success" />
+                                                            ) : (
+                                                                <Copy className="w-3 h-3 text-muted-foreground" />
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {tx.type === 'sent' ? `To ${tx.to}` : `From ${tx.from}`} • {formatTime(tx.timestamp)}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="font-medium truncate">
-                                                {tx.type === 'sent' ? `To ${tx.to}` : `From ${tx.from}`}
-                                            </p>
-                                            <p className="text-sm text-muted-foreground">{formatTime(tx.timestamp)}</p>
-                                        </div>
+                                        <p className={`font-semibold flex-shrink-0 ${tx.type === 'sent' ? 'text-foreground' : 'text-success'}`}>
+                                            {tx.type === 'sent' ? '−' : '+'}{tx.amount.toFixed(2)} USDC
+                                        </p>
                                     </div>
-                                    <p className={`font-semibold flex-shrink-0 ${tx.type === 'sent' ? 'text-foreground' : 'text-success'}`}>
-                                        {tx.type === 'sent' ? '−' : '+'}{tx.amount.toFixed(2)} USDC
-                                    </p>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

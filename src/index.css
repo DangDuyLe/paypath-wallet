@@ -151,6 +151,8 @@
       max-width: 420px;
       margin-left: auto;
       margin-right: auto;
+      border-left: 1px solid hsl(var(--border));
+      border-right: 1px solid hsl(var(--border));
     }
   }
 
@@ -285,13 +287,25 @@
 
 /* Animations */
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -302,9 +316,17 @@
   animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.stagger-1 { animation-delay: 0.05s; }
-.stagger-2 { animation-delay: 0.1s; }
-.stagger-3 { animation-delay: 0.15s; }
+.stagger-1 {
+  animation-delay: 0.05s;
+}
+
+.stagger-2 {
+  animation-delay: 0.1s;
+}
+
+.stagger-3 {
+  animation-delay: 0.15s;
+}
 
 /* Sui Connect Button Override */
 .sui-connect-wrapper {
@@ -328,9 +350,17 @@
 
 /* QR Scanner */
 @keyframes scan-line {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(200px); }
-  100% { transform: translateY(0); }
+  0% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(200px);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
 }
 
 .animate-scan-line {
@@ -405,4 +435,43 @@
 .nav-label {
   font-size: 11px;
   font-weight: 500;
+}
+
+/* Center scan button in nav */
+.nav-item-scan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  margin-top: -20px;
+}
+
+.scan-button {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: hsl(var(--foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.scan-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.scan-button:active {
+  transform: scale(0.98);
+}
+
+.stagger-4 {
+  animation-delay: 0.2s;
 }

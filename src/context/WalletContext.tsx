@@ -14,6 +14,13 @@ interface TransactionRecord {
   amount: number;
   timestamp: Date;
   token: 'SUI' | 'USDC';
+  digest?: string; // Transaction hash
+}
+
+interface ReferralStats {
+  totalCommission: number;
+  f0Volume: number;
+  f0Count: number;
 }
 
 interface LinkedBank {
@@ -80,6 +87,8 @@ interface WalletState {
   contacts: string[];
   kycStatus: KYCStatus;
   isLoadingBalance: boolean;
+  rewardPoints: number;
+  referralStats: ReferralStats;
 }
 
 interface WalletContextType extends WalletState {
@@ -103,9 +112,11 @@ interface WalletContextType extends WalletState {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 const mockTransactions: TransactionRecord[] = [
-  { id: '1', type: 'sent', to: '@alice', amount: 10, timestamp: new Date(Date.now() - 3600000), token: 'USDC' },
-  { id: '2', type: 'received', from: '@bob', amount: 25.5, timestamp: new Date(Date.now() - 7200000), token: 'USDC' },
-  { id: '3', type: 'sent', to: '@charlie', amount: 5, timestamp: new Date(Date.now() - 86400000), token: 'USDC' },
+  { id: '1', type: 'sent', to: '@alice', amount: 10, timestamp: new Date(Date.now() - 3600000), token: 'USDC', digest: '5Am7kZ...9zXq' },
+  { id: '2', type: 'received', from: '@bob', amount: 25.5, timestamp: new Date(Date.now() - 7200000), token: 'USDC', digest: '8Bc3mL...4wYn' },
+  { id: '3', type: 'sent', to: '@charlie', amount: 5, timestamp: new Date(Date.now() - 86400000), token: 'USDC', digest: '2Dp9nR...7vTm' },
+  { id: '4', type: 'received', from: '@dave', amount: 100, timestamp: new Date(Date.now() - 172800000), token: 'USDC', digest: '6Eq5oS...1uWp' },
+  { id: '5', type: 'sent', to: '@eve', amount: 15.75, timestamp: new Date(Date.now() - 259200000), token: 'USDC', digest: '9Fr2pT...3xKo' },
 ];
 
 // Exchange rate: 1 USDC = 25,500 VND
@@ -131,6 +142,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     contacts: ['@alice', '@bob'],
     kycStatus: 'unverified',
     isLoadingBalance: false,
+    rewardPoints: 1250,
+    referralStats: { totalCommission: 15.5, f0Volume: 50000, f0Count: 12 },
   });
 
   // Fetch REAL balances and transactions from blockchain
@@ -384,6 +397,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       contacts: ['@alice', '@bob'],
       kycStatus: 'unverified',
       isLoadingBalance: false,
+      rewardPoints: 1250,
+      referralStats: { totalCommission: 15.5, f0Volume: 50000, f0Count: 12 },
     });
   };
 
