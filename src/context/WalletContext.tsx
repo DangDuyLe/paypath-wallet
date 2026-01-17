@@ -134,7 +134,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     suiBalance: 0,
     usdcBalance: 0,
     balanceVnd: 0,
-    transactions: mockTransactions,
+    transactions: [], // No mock data, only real blockchain transactions
     linkedBanks: [],
     linkedWallets: [],
     defaultAccountId: null,
