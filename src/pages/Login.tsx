@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { ConnectButton, useCurrentAccount, useConnectWallet, useWallets } from '@mysten/dapp-kit';
-import { useEffect, useState, useCallback } from 'react';
+import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
+import { useEffect, useState } from 'react';
+import { useWalletConnect } from '@/hooks/useWalletConnect';
 
 // Detect if user is on mobile device
 const isMobileDevice = (): boolean => {
@@ -19,32 +20,12 @@ const Login = () => {
   const [hasClickedConnect, setHasClickedConnect] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  const wallets = useWallets();
-  const { mutate: connect } = useConnectWallet();
+  // WalletConnect hook for mobile deeplink
+  const { openSlushWallet, isConnecting: wcConnecting } = useWalletConnect();
 
   useEffect(() => {
     setIsMobile(isMobileDevice());
   }, []);
-
-  // Handle mobile wallet connection with deeplink
-  const handleMobileConnect = useCallback(() => {
-    // Find Sui Wallet / Slush wallet
-    const suiWallet = wallets.find(
-      (w) => w.name.toLowerCase().includes('sui') || w.name.toLowerCase().includes('slush')
-    );
-
-    if (suiWallet) {
-      // Connect directly if wallet is available
-      connect({ wallet: suiWallet });
-    } else {
-      // Open deeplink to Slush Wallet - it will handle the connection
-      const currentUrl = encodeURIComponent(window.location.href);
-      // Format: suiwallet://wc?uri= - but we need actual WC URI
-      // For now, just open the wallet and let user connect from there
-      window.location.href = `suiwallet://`;
-    }
-    setHasClickedConnect(true);
-  }, [wallets, connect]);
 
   useEffect(() => {
     if (currentAccount && hasClickedConnect) {
@@ -67,6 +48,12 @@ const Login = () => {
     setHasClickedConnect(true);
   };
 
+  // Handle mobile wallet connection with WalletConnect deeplink
+  const handleMobileConnect = async () => {
+    setHasClickedConnect(true);
+    await openSlushWallet();
+  };
+
   return (
     <div className="app-container">
       <div className="page-wrapper justify-between">
@@ -85,12 +72,13 @@ const Login = () => {
         <div className="space-y-4 animate-slide-up pb-8">
           {isMobile ? (
             <>
-              {/* Mobile: Show Open in App button */}
+              {/* Mobile: Show Open in App button with WalletConnect */}
               <button
                 onClick={handleMobileConnect}
                 className="btn-primary w-full"
+                disabled={wcConnecting}
               >
-                Open in Slush Wallet
+                {wcConnecting ? 'Opening Wallet...' : 'Open in Slush Wallet'}
               </button>
 
               <div onClick={handleConnectClick}>
