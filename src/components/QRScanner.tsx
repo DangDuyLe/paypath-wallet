@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Camera, Upload, SwitchCamera, Loader2 } from 'lucide-react';
+import { X, Camera, Image as ImageIcon, SwitchCamera, Loader2 } from 'lucide-react';
 import jsQR from 'jsqr';
 
 interface QRScannerProps {
@@ -13,6 +13,7 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>('');
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
@@ -35,6 +36,9 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
   const startCamera = async () => {
     try {
       setError('');
+      // Stop any existing stream first
+      stopCamera();
+
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: facingMode,
@@ -48,10 +52,11 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
         // Start continuous scanning
         startContinuousScan();
       }
+      streamRef.current = mediaStream;
       setStream(mediaStream);
     } catch (err) {
       console.error('Camera error:', err);
-      setError('Không thể truy cập camera. Vui lòng cấp quyền hoặc upload ảnh QR.');
+      setError('Unable to access camera. Please allow permissions or upload a QR image.');
     }
   };
 
@@ -60,9 +65,13 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
       clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
     }
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       setStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
   };
 
@@ -101,7 +110,7 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
     });
 
     if (code?.data) {
-      console.log('QR Code detected from camera:', code.data);
+
       stopCamera();
       onScan(code.data);
     }
@@ -119,14 +128,13 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
       const qrData = await decodeQRFromFile(file);
 
       if (qrData) {
-        console.log('QR Code decoded from file:', qrData);
         onScan(qrData);
       } else {
-        setError('Không tìm thấy mã QR trong ảnh. Vui lòng thử ảnh khác.');
+        setError('No QR code found in the image. Please try another one.');
       }
     } catch (err) {
       console.error('Error decoding QR:', err);
-      setError('Lỗi khi đọc mã QR. Vui lòng thử lại.');
+      setError('Error reading QR code. Please try again.');
     } finally {
       setIsProcessing(false);
       // Reset file input
@@ -212,12 +220,12 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
               {isProcessing ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Đang xử lý...
+                  Processing...
                 </>
               ) : (
                 <>
-                  <Upload className="w-5 h-5" />
-                  Upload ảnh QR
+                  <ImageIcon className="w-5 h-5" />
+                  Upload Image
                 </>
               )}
             </button>
@@ -256,39 +264,33 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
       {/* Bottom Controls */}
       <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70 to-transparent">
         <div className="flex justify-center items-center gap-6">
-          {/* Upload Button */}
+          {/* Upload Button - Center */}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing}
-            className="p-4 rounded-full bg-white/20 hover:bg-white/30 transition-colors disabled:opacity-50"
+            className="flex flex-col items-center gap-2 text-white/80 hover:text-white transition-colors"
           >
-            {isProcessing ? (
-              <Loader2 className="w-6 h-6 text-white animate-spin" />
-            ) : (
-              <Upload className="w-6 h-6 text-white" />
-            )}
+            <div className="p-4 rounded-full bg-white/20 hover:bg-white/30 transition-colors disabled:opacity-50">
+              {isProcessing ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : (
+                <ImageIcon className="w-6 h-6" />
+              )}
+            </div>
+            <span className="text-xs font-medium">Upload</span>
           </button>
 
-          {/* Capture Button */}
-          <button
-            onClick={handleCaptureFrame}
-            disabled={!stream}
-            className="w-16 h-16 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform disabled:opacity-50"
-          >
-            <div className="w-12 h-12 rounded-full border-4 border-black" />
-          </button>
-
-          {/* Switch Camera Button */}
+          {/* Switch Camera Button - Right */}
           <button
             onClick={switchCamera}
-            className="p-4 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+            className="absolute right-8 p-4 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
           >
             <SwitchCamera className="w-6 h-6 text-white" />
           </button>
         </div>
 
-        <p className="text-center text-white/60 text-sm mt-4">
-          {isProcessing ? 'Đang xử lý mã QR...' : 'Đưa mã QR vào khung hình hoặc upload ảnh'}
+        <p className="text-center text-white/60 text-sm mt-8">
+          {isProcessing ? 'Processing...' : 'Scan QR code or upload image'}
         </p>
       </div>
 

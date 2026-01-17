@@ -44,11 +44,6 @@ const Onboarding = () => {
     setIsChecking(true);
 
     // Log registration data (email and referral can be sent to backend later)
-    console.log('Registration:', {
-      username: clean,
-      email: email || null,
-      referral: referral.replace('@', '').trim() || null,
-    });
 
     // Simulate check
     setTimeout(() => {

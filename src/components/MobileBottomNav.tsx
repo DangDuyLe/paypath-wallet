@@ -29,7 +29,7 @@ const MobileBottomNav = () => {
                 className="nav-item-scan"
             >
                 <div className="scan-button">
-                    <ScanLine className="w-6 h-6 text-white" />
+                    <ScanLine className="w-6 h-6" />
                 </div>
                 <span className="nav-label">Scan</span>
             </button>

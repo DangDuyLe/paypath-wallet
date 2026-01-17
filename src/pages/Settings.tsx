@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { Wallet, Building2, Scan, Check, Trash2, Star, Shield, LogOut, Key, History, HelpCircle, ChevronRight, Loader2, AlertTriangle } from 'lucide-react';
+import { Wallet, Building2, Scan, Check, Trash2, Star, Shield, LogOut, Loader2, AlertTriangle, ChevronLeft } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
 import { useDisconnectWallet } from '@mysten/dapp-kit';
 import * as gaian from '@/services/gaian';
@@ -248,7 +248,7 @@ const Settings = () => {
           <div className="page-wrapper">
             {/* Header */}
             <div className="flex justify-between items-center mb-6 animate-fade-in">
-              <h1 className="text-xl font-bold">Link Bank</h1>
+              <h1 className="text-xl font-bold">Add Bank Account</h1>
               <button
                 onClick={() => { setView('main'); setScannedBank(null); setParseError(''); }}
                 className="text-muted-foreground hover:text-foreground transition-colors"
@@ -339,14 +339,14 @@ const Settings = () => {
     <div className="app-container">
       <div className="page-wrapper">
         {/* Header */}
-        <div className="flex justify-between items-center mb-6 animate-fade-in">
-          <h1 className="text-xl font-bold">Settings</h1>
+        <div className="flex items-center gap-2 mb-6 animate-fade-in">
           <button
             onClick={() => navigate('/dashboard')}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className="p-2 -ml-2 rounded-full hover:bg-secondary transition-colors"
           >
-            Done
+            <ChevronLeft className="w-6 h-6" />
           </button>
+          <h1 className="text-xl font-bold">Settings</h1>
         </div>
 
         {/* Profile */}
@@ -357,7 +357,7 @@ const Settings = () => {
 
         {/* Wallets */}
         <div className="mb-6 animate-slide-up stagger-1">
-          <p className="section-title">Wallets</p>
+          <p className="section-title">Sui Wallets</p>
           <div className="rounded-xl border border-border overflow-hidden">
             {linkedWallets.map((wallet) => (
               <div key={wallet.id} className="row-item px-4">
@@ -376,10 +376,9 @@ const Settings = () => {
                   ) : (
                     <button
                       onClick={() => setDefaultAccount(wallet.id, 'wallet')}
-                      className="p-2 hover:bg-secondary transition-colors"
-                      title="Set as default"
+                      className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
                     >
-                      <Star className="w-4 h-4 text-muted-foreground" />
+                      Set Default
                     </button>
                   )}
                   {linkedWallets.length > 1 && (
@@ -406,7 +405,7 @@ const Settings = () => {
 
         {/* Banks */}
         <div className="mb-6 animate-slide-up stagger-2">
-          <p className="section-title">Banks</p>
+          <p className="section-title">Bank Accounts</p>
           <div className="rounded-xl border border-border overflow-hidden">
             {linkedBanks.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
@@ -430,10 +429,9 @@ const Settings = () => {
                     ) : (
                       <button
                         onClick={() => setDefaultAccount(bank.id, 'bank')}
-                        className="p-2 hover:bg-secondary transition-colors"
-                        title="Set as default"
+                        className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
                       >
-                        <Star className="w-4 h-4 text-muted-foreground" />
+                        Set Default
                       </button>
                     )}
                     <button
@@ -452,7 +450,7 @@ const Settings = () => {
               className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors border-t border-border flex items-center justify-center gap-2"
             >
               <Building2 className="w-4 h-4" />
-              Link Bank
+              Add Bank Account
             </button>
           </div>
         </div>
@@ -480,33 +478,7 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="mb-6 animate-slide-up">
-          <p className="section-title">Actions</p>
-          <div className="rounded-xl border border-border overflow-hidden">
-            <button className="w-full row-item px-4 hover:bg-secondary transition-colors">
-              <div className="flex items-center gap-3">
-                <Key className="w-5 h-5" />
-                <span className="font-medium">Export Private Key</span>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
-            <button className="w-full row-item px-4 hover:bg-secondary transition-colors">
-              <div className="flex items-center gap-3">
-                <History className="w-5 h-5" />
-                <span className="font-medium">Transaction History</span>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
-            <button className="w-full row-item px-4 hover:bg-secondary transition-colors">
-              <div className="flex items-center gap-3">
-                <HelpCircle className="w-5 h-5" />
-                <span className="font-medium">Support</span>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
-          </div>
-        </div>
+
 
         {/* Disconnect */}
         <button

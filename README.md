@@ -1,4 +1,4 @@
-# PayPath - Sui Blockchain Wallet
+# HiddenPay - Sui Blockchain Wallet
 
 A minimalist Sui Blockchain Wallet WebApp for the Sui Hackathon.
 
@@ -6,7 +6,7 @@ A minimalist Sui Blockchain Wallet WebApp for the Sui Hackathon.
 
 - **Connect Wallet**: Connect using Sui wallets (Slush, Sui Wallet, Suiet, etc.)
 - **Username System**: Claim a unique @username for easy payments
-- **Send SUI**: Send to PayPath usernames or scan VietQR codes
+- **Send SUI**: Send to HiddenPay usernames or scan VietQR codes
 - **QR Scanner**: Camera-based QR scanning for payments
 - **Bank Linking**: Link bank accounts via QR code
 

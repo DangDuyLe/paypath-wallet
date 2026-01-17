@@ -43,11 +43,11 @@ export function useWalletConnect() {
 
                 // Handle session events
                 signClient.on('session_event', (event) => {
-                    console.log('Session event:', event);
+
                 });
 
                 signClient.on('session_update', ({ topic, params }) => {
-                    console.log('Session update:', topic, params);
+
                 });
 
                 signClient.on('session_delete', () => {

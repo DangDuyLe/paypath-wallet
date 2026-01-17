@@ -358,8 +358,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           },
           {
             onSuccess: (result) => {
-              console.log('Transaction Successful:', result);
-              console.log('REAL DIGEST:', result.digest);
+
 
               // Add transaction record with REAL digest
               const newTransaction: TransactionRecord = {

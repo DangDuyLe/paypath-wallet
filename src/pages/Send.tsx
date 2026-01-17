@@ -41,11 +41,13 @@ const Send = () => {
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
   const [showScanner, setShowScanner] = useState(false);
+  const [isAutoScan, setIsAutoScan] = useState(false);
 
   // Auto-open scanner if navigated from mobile nav
   useEffect(() => {
     if (location.state?.autoScan) {
       setShowScanner(true);
+      setIsAutoScan(true);
       // Clear state so it doesn't reopen on refresh/back
       window.history.replaceState({}, document.title);
     }
@@ -236,7 +238,7 @@ const Send = () => {
 
     if (scanResult === 'external' && externalBank) {
       if (isNaN(amountNum) || amountNum <= 0) { setError('Invalid amount'); return; }
-      if (amountNum > usdcBalance) { setError('Insufficient USDC balance'); return; }
+      if (amountNum > usdcBalance) { setError('Insufficient balance'); return; }
       if (suiBalance < fee) { setError('Not enough SUI for gas fees'); return; }
       setStep('review');
       return;
@@ -263,7 +265,7 @@ const Send = () => {
       const result = await sendUsdc(toAddress, parseFloat(amount));
 
       if (result.success) {
-        console.log('TRANSACTION COMPLETE - REAL DIGEST:', result.digest);
+
         setStep('success');
       } else {
         setError('Transaction failed');
@@ -295,7 +297,7 @@ const Send = () => {
           <div className="animate-fade-in">
             <Loader2 className="w-12 h-12 mx-auto mb-6 animate-spin text-muted-foreground" />
             <p className="text-xl font-bold mb-2">Sending...</p>
-            <p className="text-muted-foreground">{amount} USDC</p>
+            <p className="text-muted-foreground">${amount}</p>
           </div>
         </div>
       </div>
@@ -382,11 +384,11 @@ const Send = () => {
               )}
               <div className="flex justify-between items-center py-3">
                 <span className="text-muted-foreground text-sm">Amount</span>
-                <span className="font-medium">{amount} USDC</span>
+                <span className="font-medium">${amount}</span>
               </div>
               <div className="flex justify-between items-center py-3">
                 <span className="text-muted-foreground text-sm">Fee (0.2%)</span>
-                <span className="text-sm">{(parseFloat(amount) * 0.002).toFixed(4)} USDC</span>
+                <span className="text-sm">${(parseFloat(amount) * 0.002).toFixed(4)}</span>
               </div>
               <div className="flex justify-between items-center py-3">
                 <span className="text-muted-foreground text-sm">Network Fee</span>
@@ -394,7 +396,7 @@ const Send = () => {
               </div>
               <div className="flex justify-between items-center py-3 bg-secondary -mx-4 px-4 rounded-xl">
                 <span className="font-semibold text-sm">Total</span>
-                <span className="font-bold">{(parseFloat(amount) + parseFloat(amount) * 0.002).toFixed(2)} USDC</span>
+                <span className="font-bold">${(parseFloat(amount) + parseFloat(amount) * 0.002).toFixed(3)}</span>
               </div>
             </div>
           </div>
@@ -412,7 +414,12 @@ const Send = () => {
     <>
       <QRScanner
         isOpen={showScanner}
-        onClose={() => setShowScanner(false)}
+        onClose={() => {
+          setShowScanner(false);
+          if (isAutoScan) {
+            navigate('/dashboard');
+          }
+        }}
         onScan={handleQRScanned}
         title="Scan QR"
       />
@@ -427,77 +434,31 @@ const Send = () => {
           </div>
 
           <div className="flex-1 space-y-4 animate-slide-up">
-            {/* Source Selector */}
-            <div>
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Pay From</label>
-              <div className="relative">
-                <button
-                  onClick={() => setShowSourceMenu(!showSourceMenu)}
-                  className="w-full card-modern flex items-center justify-between py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`icon-circle ${selectedSource?.type === 'wallet' ? 'bg-blue-500/10' : 'bg-green-500/10'}`}>
-                      {selectedSource?.type === 'wallet'
-                        ? <Wallet className="w-4 h-4 text-blue-500" />
-                        : <Building2 className="w-4 h-4 text-green-500" />
-                      }
-                    </div>
-                    <div className="text-left">
-                      <p className="font-medium text-sm">{selectedSource?.name || 'Select Source'}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedSource?.type === 'wallet' ? 'Wallet' : 'Bank Account'}
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${showSourceMenu ? 'rotate-180' : ''}`} />
-                </button>
 
-                {/* Source Dropdown */}
-                {showSourceMenu && (
-                  <div className="absolute top-full left-0 right-0 mt-2 card-modern z-10 py-1 max-h-60 overflow-y-auto">
-                    {allSources.map((source) => (
-                      <button
-                        key={`${source.type}-${source.id}`}
-                        onClick={() => handleSelectSource(source)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary transition-colors ${selectedSourceId === source.id && selectedSourceType === source.type ? 'bg-secondary' : ''
-                          }`}
-                      >
-                        <div className={`icon-circle ${source.type === 'wallet' ? 'bg-blue-500/10' : 'bg-green-500/10'}`}>
-                          {source.type === 'wallet'
-                            ? <Wallet className="w-4 h-4 text-blue-500" />
-                            : <Building2 className="w-4 h-4 text-green-500" />
-                          }
-                        </div>
-                        <div className="text-left flex-1">
-                          <p className="font-medium text-sm">{source.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {source.type === 'wallet' ? 'Wallet' : 'Bank Account'}
-                          </p>
-                        </div>
-                        {selectedSourceId === source.id && selectedSourceType === source.type && (
-                          <Check className="w-4 h-4 text-success" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
 
             {/* Scan QR Button */}
+            {/* Scan QR Button - Redesigned */}
             <button
               onClick={() => setShowScanner(true)}
               disabled={isParsing}
-              className="w-full card-modern flex items-center justify-center gap-3 py-4"
+              className="w-full h-32 border-2 border-dashed border-input rounded-xl hover:border-primary hover:bg-secondary/30 transition-all flex flex-col items-center justify-center gap-3 group relative overflow-hidden"
             >
-              <div className="icon-circle-primary">
+              {/* Corner Accents (The "Khung") */}
+              <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-muted-foreground/30 group-hover:border-primary transition-colors rounded-tl-md" />
+              <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-muted-foreground/30 group-hover:border-primary transition-colors rounded-tr-md" />
+              <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-muted-foreground/30 group-hover:border-primary transition-colors rounded-bl-md" />
+              <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-muted-foreground/30 group-hover:border-primary transition-colors rounded-br-md" />
+
+              <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center group-hover:scale-110 transition-transform z-10">
                 {isParsing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 ) : (
-                  <Scan className="w-4 h-4" />
+                  <Scan className="w-6 h-6 text-foreground" />
                 )}
               </div>
-              <span className="font-semibold">{isParsing ? 'Processing QR...' : 'Scan to Pay'}</span>
+              <p className="font-medium text-muted-foreground group-hover:text-foreground transition-colors z-10">
+                {isParsing ? 'Processing QR...' : 'Scan QR Code to Pay'}
+              </p>
             </button>
 
             <div className="flex items-center gap-3 text-muted-foreground text-sm">
@@ -602,7 +563,7 @@ const Send = () => {
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="text-sm font-medium text-muted-foreground">Amount</label>
-                <span className="text-sm text-muted-foreground">Balance: {usdcBalance.toFixed(2)} USDC</span>
+                <span className="text-sm text-muted-foreground">Balance: ${usdcBalance.toFixed(2)}</span>
               </div>
               <input
                 type="number"

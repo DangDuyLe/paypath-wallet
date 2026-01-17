@@ -78,7 +78,7 @@ const History = () => {
                     ) : transactions.length === 0 ? (
                         <div className="py-12 text-center text-muted-foreground">
                             <p className="text-lg mb-2">No transactions yet</p>
-                            <p className="text-sm">Your USDC transactions will appear here</p>
+                            <p className="text-sm">Your transactions will appear here</p>
                         </div>
                     ) : (
                         <div className="card-modern space-y-1">
@@ -101,7 +101,7 @@ const History = () => {
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <p className="font-medium text-sm">
-                                                        {tx.type === 'sent' ? 'Sent' : 'Received'} USDC
+                                                        {tx.type === 'sent' ? 'Sent' : 'Received'}
                                                     </p>
                                                     <div className="flex items-center gap-1">
                                                         <span className="text-xs text-muted-foreground">•</span>
@@ -131,7 +131,7 @@ const History = () => {
                                             </div>
                                         </div>
                                         <p className={`font-semibold flex-shrink-0 ${tx.type === 'sent' ? 'text-foreground' : 'text-success'}`}>
-                                            {tx.type === 'sent' ? '−' : '+'}{tx.amount.toFixed(3)} USDC
+                                            {tx.type === 'sent' ? '−' : '+'}${tx.amount.toFixed(3)}
                                         </p>
                                     </div>
                                 );

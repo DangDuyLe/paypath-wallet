@@ -282,30 +282,14 @@
   .tag {
     @apply inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-secondary;
   }
+
+  .tag-success {
+    @apply inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-success text-success-foreground shadow-sm;
+  }
 }
 
 /* Animations */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
 
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
@@ -447,30 +431,61 @@
   border: none;
   cursor: pointer;
   color: hsl(var(--muted-foreground));
-  margin-top: -20px;
+  margin-top: -30px;
+  /* Lift it up more */
+  position: relative;
+  z-index: 10;
 }
 
 .scan-button {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: hsl(var(--foreground));
+  /* Consistent with theme: Primary color (Black in light, White in dark) */
+  background: hsl(var(--primary));
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  /* Floating effect with consistent shadow color */
+  box-shadow: 0 8px 20px hsl(var(--primary) / 0.3), 0 0 0 6px hsl(var(--card));
   transition: transform 0.2s, box-shadow 0.2s;
+  /* Icon color matches primary foreground */
+  color: hsl(var(--primary-foreground));
 }
 
 .scan-button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  transform: translateY(-2px) scale(1.05);
+  /* Enhanced shadow on hover */
+  box-shadow: 0 12px 25px hsl(var(--primary) / 0.4), 0 0 0 6px hsl(var(--card));
 }
 
 .scan-button:active {
-  transform: scale(0.98);
+  transform: scale(0.95);
 }
 
 .stagger-4 {
   animation-delay: 0.2s;
+}
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

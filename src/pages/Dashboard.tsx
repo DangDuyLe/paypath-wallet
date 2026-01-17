@@ -95,10 +95,10 @@ const Dashboard = () => {
                                 <span className="balance-decimal">
                                     {isLoadingBalance ? '' : balanceDecimal}
                                 </span>
-                                <span className="text-lg font-semibold text-muted-foreground ml-1">USDC</span>
+
                             </>
                         ) : (
-                            <span className="balance-display">$••••• USDC</span>
+                            <span className="balance-display">$•••••</span>
                         )}
                         <button
                             onClick={() => setShowBalance(!showBalance)}
@@ -142,7 +142,7 @@ const Dashboard = () => {
                                 <div className="flex items-center justify-center gap-1.5 mb-1">
                                     <Award className="w-4 h-4 text-success" />
                                 </div>
-                                <p className="text-lg font-bold">{referralStats.totalCommission} USDC</p>
+                                <p className="text-lg font-bold">${referralStats.totalCommission}</p>
                                 <p className="text-xs text-muted-foreground">Earned</p>
                             </div>
                             {/* Volume */}
@@ -151,7 +151,7 @@ const Dashboard = () => {
                                     <TrendingUp className="w-4 h-4 text-success" />
                                 </div>
                                 <p className="text-lg font-bold">{formatVolume(referralStats.f0Volume)}</p>
-                                <p className="text-xs text-muted-foreground">F0 Volume</p>
+                                <p className="text-xs text-muted-foreground">Volume</p>
                             </div>
                             {/* Network */}
                             <div className="py-2">
@@ -189,7 +189,7 @@ const Dashboard = () => {
                                         </div>
                                         <div>
                                             <p className="font-medium text-sm">
-                                                {tx.type === 'sent' ? 'Sent' : 'Received'} USDC
+                                                {tx.type === 'sent' ? 'Sent' : 'Received'}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
                                                 {formatTime(tx.timestamp)}
