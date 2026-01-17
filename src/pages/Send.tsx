@@ -69,8 +69,8 @@ const Send = () => {
   const [externalBank, setExternalBank] = useState<ExternalBankInfo | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  if (!isConnected || !username) {
-    navigate('/');
+  if (!username) {
+    navigate('/onboarding', { replace: true });
     return null;
   }
 

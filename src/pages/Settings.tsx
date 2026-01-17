@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { Wallet, Building2, Scan, Check, Trash2, Star, Shield, LogOut, Loader2, AlertTriangle, ChevronLeft, Copy } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { 
+  Wallet, Building2, Scan, Check, Trash2, Star, Shield, LogOut, 
+  Loader2, AlertTriangle, ChevronLeft, Copy 
+} from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
 import { useDisconnectWallet } from '@mysten/dapp-kit';
 import * as gaian from '@/services/gaian';
@@ -14,10 +18,13 @@ interface ScannedBankData {
 
 const Settings = () => {
   const navigate = useNavigate();
+  
+  // --- Hooks from both branches ---
   const { mutate: disconnectSuiWallet } = useDisconnectWallet();
+  const { logout } = useAuth(); // ZkLogin Logout
   const {
     username,
-    disconnect,
+    disconnect, // Wallet Context Logout
     isConnected,
     linkedBanks,
     linkedWallets,
@@ -30,6 +37,7 @@ const Settings = () => {
     setDefaultAccount,
   } = useWallet();
 
+  // --- State (From Main Branch logic) ---
   const [view, setView] = useState<'main' | 'add-wallet' | 'add-bank'>('main');
   const [showScanner, setShowScanner] = useState(false);
   const [newWalletName, setNewWalletName] = useState('');
@@ -41,14 +49,19 @@ const Settings = () => {
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState('');
 
-  if (!isConnected || !username) {
-    navigate('/');
+  // --- Auth Check ---
+  if (!username) {
+    navigate('/onboarding', { replace: true });
     return null;
   }
 
+  // --- Handlers ---
+  
+  // Merged Disconnect Handler
   const handleDisconnect = () => {
-    disconnectSuiWallet();
-    disconnect();
+    disconnectSuiWallet(); // Disconnect Sui Wallet
+    disconnect();          // Clear Wallet Context
+    logout();              // Clear ZkLogin Auth
     navigate('/login');
   };
 
@@ -100,28 +113,25 @@ const Settings = () => {
   const isDefault = (id: string, type: 'wallet' | 'bank') =>
     defaultAccountId === id && defaultAccountType === type;
 
-  // Handle wallet QR scan - reject bank QRs, only accept wallet addresses
+  // Handle wallet QR scan
   const handleScanWallet = async (qrString: string) => {
     setShowScanner(false);
     setIsParsing(true);
     setParseError('');
 
     try {
-      // Check if it's a HiddenWallet QR (username)
       if (gaian.isHiddenWalletQr(qrString)) {
         setParseError('This is a HiddenWallet username QR. Please scan a wallet address QR.');
         setIsParsing(false);
         return;
       }
 
-      // Check if it's a valid wallet address (0x + 64 hex chars)
       if (qrString.startsWith('0x') && /^0x[a-fA-F0-9]{64}$/.test(qrString)) {
         setNewWalletAddress(qrString);
         setIsParsing(false);
         return;
       }
 
-      // Try to parse as bank QR
       const parsedBank = await gaian.parseQrString(qrString);
       if (parsedBank) {
         setParseError('This is a Bank QR code. Please scan a wallet address QR instead.');
@@ -129,7 +139,6 @@ const Settings = () => {
         return;
       }
 
-      // Unknown QR format
       setParseError('Invalid QR. Please scan a valid Sui wallet address (0x...).');
     } catch (error) {
       console.error('Wallet QR parsing error:', error);
@@ -138,6 +147,8 @@ const Settings = () => {
       setIsParsing(false);
     }
   };
+
+  // --- Render Views ---
 
   // Add Wallet View
   if (view === 'add-wallet') {
@@ -151,7 +162,6 @@ const Settings = () => {
         />
         <div className="app-container">
           <div className="page-wrapper">
-            {/* Header */}
             <div className="flex justify-between items-center mb-6 animate-fade-in">
               <h1 className="text-xl font-bold">Add Wallet</h1>
               <button
@@ -163,7 +173,6 @@ const Settings = () => {
             </div>
 
             <div className="flex-1 space-y-4 animate-slide-up">
-              {/* Scan QR Button */}
               <button
                 onClick={() => setShowScanner(true)}
                 disabled={isParsing}
@@ -182,7 +191,6 @@ const Settings = () => {
                 )}
               </button>
 
-              {/* Parse Error */}
               {parseError && (
                 <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 text-destructive">
                   <AlertTriangle className="w-5 h-5 flex-shrink-0" />
@@ -190,14 +198,12 @@ const Settings = () => {
                 </div>
               )}
 
-              {/* Or Divider */}
               <div className="flex items-center gap-3 text-muted-foreground text-sm py-2">
                 <div className="flex-1 h-px bg-border" />
                 <span>or enter manually</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
 
-              {/* Input Card */}
               <div className="rounded-xl border border-border p-4 space-y-4">
                 <div>
                   <label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Wallet Name</label>
@@ -247,7 +253,6 @@ const Settings = () => {
         />
         <div className="app-container">
           <div className="page-wrapper">
-            {/* Header */}
             <div className="flex justify-between items-center mb-6 animate-fade-in">
               <h1 className="text-xl font-bold">Add Bank Account</h1>
               <button
@@ -259,7 +264,6 @@ const Settings = () => {
             </div>
 
             <div className="flex-1 space-y-4 animate-slide-up">
-              {/* Scan QR Button */}
               <button
                 onClick={() => setShowScanner(true)}
                 disabled={isParsing}
@@ -278,7 +282,6 @@ const Settings = () => {
                 )}
               </button>
 
-              {/* Parse Error */}
               {parseError && (
                 <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 text-destructive">
                   <AlertTriangle className="w-5 h-5 flex-shrink-0" />
@@ -286,16 +289,12 @@ const Settings = () => {
                 </div>
               )}
 
-              {/* Scanned Bank Info */}
               {scannedBank && (
                 <div className="rounded-xl border border-border overflow-hidden animate-slide-up">
-                  {/* Success Header */}
                   <div className="flex items-center gap-2 px-4 py-3 bg-success/10">
                     <Check className="w-4 h-4 text-success" />
                     <span className="text-success font-medium text-sm">QR Parsed Successfully</span>
                   </div>
-
-                  {/* Bank Details */}
                   <div className="p-4 space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground text-sm">Bank</span>
@@ -313,7 +312,6 @@ const Settings = () => {
                 </div>
               )}
 
-              {/* Empty State */}
               {!scannedBank && !parseError && (
                 <div className="text-center py-12 text-muted-foreground">
                   <Building2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
@@ -339,7 +337,6 @@ const Settings = () => {
   return (
     <div className="app-container">
       <div className="page-wrapper">
-        {/* Header */}
         <div className="flex items-center gap-2 mb-6 animate-fade-in">
           <button
             onClick={() => navigate('/dashboard')}
@@ -495,8 +492,6 @@ const Settings = () => {
             </button>
           </div>
         </div>
-
-
 
         {/* Disconnect */}
         <button

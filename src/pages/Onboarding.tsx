@@ -1,26 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { Mail, Users } from 'lucide-react';
 
 const Onboarding = () => {
   const navigate = useNavigate();
-  const { setUsername, isConnected, username: existingUsername } = useWallet();
+  const { setUsername, username: existingUsername } = useWallet();
   const [inputUsername, setInputUsername] = useState('');
   const [email, setEmail] = useState('');
   const [referral, setReferral] = useState('');
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(false);
 
-  if (!isConnected) {
-    navigate('/');
-    return null;
-  }
-
-  if (existingUsername) {
-    navigate('/dashboard');
-    return null;
-  }
+  useEffect(() => {
+    if (existingUsername) {
+      if (window.location.pathname !== '/dashboard') {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [existingUsername, navigate]);
 
   const handleSubmit = () => {
     const clean = inputUsername.replace('@', '').trim().toLowerCase();
