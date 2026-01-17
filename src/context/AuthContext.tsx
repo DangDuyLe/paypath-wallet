@@ -9,7 +9,7 @@ type AuthContextValue = {
   isAuthLoading: boolean;
   user: AuthUser | null;
   token: string | null;
-  loginWithWallet: () => Promise<void>;
+  loginWithWallet: () => Promise<{ needsOnboarding: boolean }>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
 };
@@ -20,7 +20,7 @@ const TOKEN_STORAGE_KEY = 'jwt_token';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const account = useCurrentAccount();
-  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  const signPersonalMessage = useSignPersonalMessage();
 
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_STORAGE_KEY));
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
-  const loginWithWallet = useCallback(async () => {
+  const loginWithWallet = useCallback(async (): Promise<{ needsOnboarding: boolean }> => {
     if (!account?.address) {
       throw new Error('No wallet connected');
     }
@@ -58,29 +58,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const challengeRes = await getChallenge(account.address);
       const challenge: WalletChallengeResponseDto = challengeRes.data;
 
-      const messageBytes = new TextEncoder().encode(challenge.message);
-      const sigRes = await signPersonalMessage({ message: messageBytes });
+      const issuedAt = new Date().toISOString();
+      const expirationTime = challenge.expiresAt;
+
+      const message = `Sign in to ${challenge.domain}\n\nAddress: ${account.address}\nNonce: ${challenge.nonce}\nIssued At: ${issuedAt}\nExpiration Time: ${expirationTime}`;
+
+      const messageBytes = new TextEncoder().encode(message);
+      const sigRes = await signPersonalMessage.mutateAsync({ message: messageBytes });
 
       const verifyRes = await postVerify({
-        address: challenge.address,
+        address: account.address,
         domain: challenge.domain,
         nonce: challenge.nonce,
-        issuedAt: challenge.issuedAt,
-        expirationTime: challenge.expirationTime,
-        statement: challenge.statement,
-        message: challenge.message,
+        issuedAt,
+        expirationTime,
+        message,
         signature: sigRes.signature,
       });
 
-      const accessToken = (verifyRes.data as any)?.accessToken || (verifyRes.data as any)?.token;
-      if (!accessToken || typeof accessToken !== 'string') {
+      const data = verifyRes.data as unknown as {
+        accessToken?: unknown;
+        token?: unknown;
+        needsOnboarding?: unknown;
+      };
+      const accessToken =
+        typeof data?.accessToken === 'string' ? data.accessToken : typeof data?.token === 'string' ? data.token : null;
+      if (!accessToken) {
         throw new Error('Auth succeeded but no token returned from backend');
       }
+
+      const needsOnboarding = Boolean(data?.needsOnboarding);
 
       localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
       setToken(accessToken);
 
-      await refreshProfile();
+      if (!needsOnboarding) {
+        await refreshProfile();
+      }
+
+      return { needsOnboarding };
     } finally {
       setIsAuthLoading(false);
     }

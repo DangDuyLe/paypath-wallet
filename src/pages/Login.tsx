@@ -21,7 +21,7 @@ const isInSlushBrowser = (): boolean => {
 
 const Login = () => {
   const navigate = useNavigate();
-  const { connectWallet, isConnected, username, disconnect } = useWallet();
+  const { connectWallet, disconnect } = useWallet();
   const currentAccount = useCurrentAccount();
   const { mutate: disconnectSuiWallet } = useDisconnectWallet();
   const [hasClickedConnect, setHasClickedConnect] = useState(false);
@@ -29,8 +29,8 @@ const Login = () => {
   const [isInWalletBrowser, setIsInWalletBrowser] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showWalletOptions, setShowWalletOptions] = useState(false);
-  const { loginWithWallet, isAuthLoading } = useAuth();
-  const [authError, setAuthError] = useState<string | null>(null);
+const { loginWithWallet, isAuthLoading } = useAuth();
+  const [, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMobile(isMobileDevice());
@@ -40,19 +40,10 @@ const Login = () => {
   useEffect(() => {
     if (currentAccount && hasClickedConnect) {
       connectWallet(currentAccount.address);
-      if (username) {
-        navigate('/dashboard');
-      } else {
-        navigate('/onboarding');
-      }
     }
-  }, [currentAccount, hasClickedConnect, connectWallet, navigate, username]);
+  }, [currentAccount, hasClickedConnect, connectWallet]);
 
-  useEffect(() => {
-    if (isConnected && username) {
-      navigate('/dashboard');
-    }
-  }, [isConnected, username, navigate]);
+
 
   const handleConnectClick = () => {
     // If already connected, show options instead of auto-navigating

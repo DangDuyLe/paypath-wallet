@@ -18,13 +18,9 @@ api.interceptors.request.use((config) => {
 });
 
 export type WalletChallengeResponseDto = {
-  address: string;
-  domain: string;
   nonce: string;
-  issuedAt: string;
-  expirationTime: string;
-  statement?: string;
-  message: string;
+  expiresAt: string;
+  domain: string;
 };
 
 export type WalletVerifyRequestDto = {
