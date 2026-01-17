@@ -9,8 +9,8 @@ const Receive = () => {
   const [copiedUsername, setCopiedUsername] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
-  if (!isConnected || !username) {
-    navigate('/');
+  if (!username) {
+    navigate('/onboarding', { replace: true });
     return null;
   }
 
