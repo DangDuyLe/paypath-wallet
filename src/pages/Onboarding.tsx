@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
+import { Mail, Users } from 'lucide-react';
 
 const Onboarding = () => {
   const navigate = useNavigate();
   const { setUsername, isConnected, username: existingUsername } = useWallet();
   const [inputUsername, setInputUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [referral, setReferral] = useState('');
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(false);
 
@@ -32,7 +35,20 @@ const Onboarding = () => {
       return;
     }
 
+    // Validate email if provided
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
     setIsChecking(true);
+
+    // Log registration data (email and referral can be sent to backend later)
+    console.log('Registration:', {
+      username: clean,
+      email: email || null,
+      referral: referral.replace('@', '').trim() || null,
+    });
 
     // Simulate check
     setTimeout(() => {
@@ -45,36 +61,73 @@ const Onboarding = () => {
     <div className="app-container">
       <div className="page-wrapper justify-between">
         {/* Top */}
-        <div className="pt-16 animate-fade-in">
+        <div className="pt-12 animate-fade-in">
           <p className="label-caps mb-4">Almost there</p>
           <h1 className="display-medium">Choose your<br />username</h1>
         </div>
 
         {/* Middle */}
-        <div className="py-8 animate-slide-up w-full max-w-full overflow-hidden">
-          <div className="flex items-center w-full min-w-0">
-            <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
-            <input
-              type="text"
-              value={inputUsername}
-              onChange={(e) => {
-                setInputUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
-                setError('');
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              placeholder="username"
-              className="flex-1 min-w-0 w-full py-4 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
-              autoFocus
-            />
+        <div className="py-6 animate-slide-up w-full max-w-full overflow-hidden space-y-6">
+          {/* Username Input */}
+          <div>
+            <div className="flex items-center w-full min-w-0">
+              <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
+              <input
+                type="text"
+                value={inputUsername}
+                onChange={(e) => {
+                  setInputUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                  setError('');
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                placeholder="username"
+                className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
+                autoFocus
+              />
+            </div>
+            <p className="text-muted-foreground text-sm mt-2">
+              This is how people will find and pay you
+            </p>
+          </div>
+
+          {/* Optional Fields */}
+          <div className="space-y-4 pt-4 border-t border-border">
+            <p className="label-caps text-muted-foreground">Optional</p>
+
+            {/* Email Input */}
+            <div className="flex items-center gap-3">
+              <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError('');
+                }}
+                placeholder="Email address"
+                className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+              />
+            </div>
+
+            {/* Referral Input */}
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+              <input
+                type="text"
+                value={referral}
+                onChange={(e) => {
+                  setReferral(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                  setError('');
+                }}
+                placeholder="Referral username (optional)"
+                className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+              />
+            </div>
           </div>
 
           {error && (
-            <p className="text-destructive mt-4">{error}</p>
+            <p className="text-destructive">{error}</p>
           )}
-
-          <p className="text-muted-foreground mt-4">
-            This is how people will find and pay you
-          </p>
         </div>
 
         {/* Bottom */}

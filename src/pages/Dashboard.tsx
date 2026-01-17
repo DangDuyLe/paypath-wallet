@@ -142,13 +142,13 @@ const Dashboard = () => {
                                 <div className="flex items-center justify-center gap-1.5 mb-1">
                                     <Award className="w-4 h-4 text-success" />
                                 </div>
-                                <p className="text-lg font-bold text-success">{referralStats.totalCommission} USDC</p>
+                                <p className="text-lg font-bold">{referralStats.totalCommission} USDC</p>
                                 <p className="text-xs text-muted-foreground">Earned</p>
                             </div>
                             {/* Volume */}
                             <div className="py-2 border-l border-r border-border">
                                 <div className="flex items-center justify-center gap-1.5 mb-1">
-                                    <TrendingUp className="w-4 h-4 text-blue-500" />
+                                    <TrendingUp className="w-4 h-4 text-success" />
                                 </div>
                                 <p className="text-lg font-bold">{formatVolume(referralStats.f0Volume)}</p>
                                 <p className="text-xs text-muted-foreground">F0 Volume</p>
@@ -156,7 +156,7 @@ const Dashboard = () => {
                             {/* Network */}
                             <div className="py-2">
                                 <div className="flex items-center justify-center gap-1.5 mb-1">
-                                    <Users className="w-4 h-4 text-purple-500" />
+                                    <Users className="w-4 h-4 text-success" />
                                 </div>
                                 <p className="text-lg font-bold">{referralStats.f0Count}</p>
                                 <p className="text-xs text-muted-foreground">F0 Friends</p>

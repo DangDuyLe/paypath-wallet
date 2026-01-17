@@ -99,48 +99,128 @@ const Settings = () => {
   const isDefault = (id: string, type: 'wallet' | 'bank') =>
     defaultAccountId === id && defaultAccountType === type;
 
+  // Handle wallet QR scan - reject bank QRs, only accept wallet addresses
+  const handleScanWallet = async (qrString: string) => {
+    setShowScanner(false);
+    setIsParsing(true);
+    setParseError('');
+
+    try {
+      // Check if it's a PayPath QR (username)
+      if (gaian.isPayPathQr(qrString)) {
+        setParseError('This is a PayPath username QR. Please scan a wallet address QR.');
+        setIsParsing(false);
+        return;
+      }
+
+      // Check if it's a valid wallet address (0x + 64 hex chars)
+      if (qrString.startsWith('0x') && /^0x[a-fA-F0-9]{64}$/.test(qrString)) {
+        setNewWalletAddress(qrString);
+        setIsParsing(false);
+        return;
+      }
+
+      // Try to parse as bank QR
+      const parsedBank = await gaian.parseQrString(qrString);
+      if (parsedBank) {
+        setParseError('This is a Bank QR code. Please scan a wallet address QR instead.');
+        setIsParsing(false);
+        return;
+      }
+
+      // Unknown QR format
+      setParseError('Invalid QR. Please scan a valid Sui wallet address (0x...).');
+    } catch (error) {
+      console.error('Wallet QR parsing error:', error);
+      setParseError('Failed to parse QR code. Please enter address manually.');
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
   // Add Wallet View
   if (view === 'add-wallet') {
     return (
-      <div className="app-container">
-        <div className="page-wrapper">
-          <div className="flex justify-between items-center mb-8 animate-fade-in">
-            <h1 className="text-xl font-bold">Add Wallet</h1>
-            <button onClick={() => setView('main')} className="btn-ghost">Cancel</button>
-          </div>
-
-          <div className="flex-1 space-y-6 animate-slide-up">
-            <div>
-              <p className="label-caps mb-2">Wallet Name</p>
-              <input
-                type="text"
-                value={newWalletName}
-                onChange={(e) => setNewWalletName(e.target.value)}
-                placeholder="e.g. Trading Wallet"
-                className="input-box"
-              />
+      <>
+        <QRScanner
+          isOpen={showScanner}
+          onClose={() => setShowScanner(false)}
+          onScan={handleScanWallet}
+          title="Scan Wallet QR"
+        />
+        <div className="app-container">
+          <div className="page-wrapper">
+            <div className="flex justify-between items-center mb-8 animate-fade-in">
+              <h1 className="text-xl font-bold">Add Wallet</h1>
+              <button onClick={() => { setView('main'); setParseError(''); setNewWalletAddress(''); setNewWalletName(''); }} className="btn-ghost">Cancel</button>
             </div>
-            <div>
-              <p className="label-caps mb-2">Address</p>
-              <input
-                type="text"
-                value={newWalletAddress}
-                onChange={(e) => setNewWalletAddress(e.target.value)}
-                placeholder="0x..."
-                className="input-box font-mono"
-              />
-            </div>
-          </div>
 
-          <button
-            onClick={handleAddWallet}
-            disabled={!newWalletName || !newWalletAddress}
-            className="btn-primary mt-8"
-          >
-            Add Wallet
-          </button>
+            <div className="flex-1 space-y-6 animate-slide-up">
+              {/* Scan QR Button */}
+              <button
+                onClick={() => setShowScanner(true)}
+                disabled={isParsing}
+                className="w-full py-4 border border-border text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isParsing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Scan className="w-5 h-5" />
+                    Scan Wallet QR Code
+                  </>
+                )}
+              </button>
+
+              {/* Parse Error */}
+              {parseError && (
+                <div className="flex items-center gap-2 p-4 border border-destructive text-destructive">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                  <p className="font-medium text-sm">{parseError}</p>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 text-muted-foreground text-sm">
+                <div className="flex-1 h-px bg-border" />
+                <span>or enter manually</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
+              <div>
+                <p className="label-caps mb-2">Wallet Name</p>
+                <input
+                  type="text"
+                  value={newWalletName}
+                  onChange={(e) => setNewWalletName(e.target.value)}
+                  placeholder="e.g. Trading Wallet"
+                  className="input-box w-full"
+                />
+              </div>
+              <div>
+                <p className="label-caps mb-2">Address</p>
+                <input
+                  type="text"
+                  value={newWalletAddress}
+                  onChange={(e) => { setNewWalletAddress(e.target.value); setParseError(''); }}
+                  placeholder="0x..."
+                  className="input-box w-full font-mono"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleAddWallet}
+              disabled={!newWalletName || !newWalletAddress}
+              className="btn-primary mt-8"
+            >
+              Add Wallet
+            </button>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
