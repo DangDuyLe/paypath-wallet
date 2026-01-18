@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2, X, User, AlertCircle, CreditCard, Copy } from 'lucide-react';
+import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2, X, User, AlertCircle, CreditCard, Copy, Zap } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
 import * as gaian from '@/services/gaian';
+import { toast } from '@/components/ui/sonner';
 
 type SendStep = 'input' | 'review' | 'sending' | 'success' | 'error';
 type ScanResult = 'none' | 'internal' | 'external' | 'error';
@@ -35,6 +36,8 @@ const Send = () => {
     defaultAccountId,
     defaultAccountType,
     isValidWalletAddress,
+    checkCampaignSession,
+    endCampaignSession,
   } = useWallet();
 
   const [step, setStep] = useState<SendStep>('input');
@@ -68,6 +71,47 @@ const Send = () => {
   const [isParsing, setIsParsing] = useState(false);
   const [externalBank, setExternalBank] = useState<ExternalBankInfo | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Campaign Mode State
+  const [isCampaignMode, setIsCampaignMode] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const hasShownToast = useRef(false);
+
+  // Check campaign session on mount, cleanup on unmount
+  useEffect(() => {
+    // On mount: check if we're in campaign mode
+    const isInCampaign = checkCampaignSession();
+
+    if (isInCampaign) {
+      setIsCampaignMode(true);
+    } else {
+      // Session lost or direct access
+      setIsCampaignMode(false);
+
+      // Show toast if user came from a reload/direct access (check referrer or navigation type)
+      // We show toast only once and only if there's evidence of session loss
+      if (!hasShownToast.current) {
+        const navEntries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+        const navigationType = navEntries.length > 0 ? navEntries[0].type : 'navigate';
+
+        // If it was a reload, the user likely had a session that was destroyed
+        if (navigationType === 'reload') {
+          toast.warning('⚠️ Session expired! Please join again from Dashboard.', {
+            description: 'Your campaign session was lost due to page reload.',
+            duration: 5000,
+          });
+          hasShownToast.current = true;
+        }
+      }
+    }
+
+    setSessionChecked(true);
+
+    // On unmount: end the campaign session (anti-reload/anti-exit trap)
+    return () => {
+      endCampaignSession();
+    };
+  }, []);
 
   if (!isConnected || !username) {
     navigate('/');
@@ -436,6 +480,14 @@ const Send = () => {
           </div>
 
           <div className="flex-1 space-y-4 animate-slide-up">
+
+            {/* Campaign Mode Banner */}
+            {isCampaignMode && (
+              <div className="py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center justify-center gap-2 animate-pulse">
+                <Zap className="w-4 h-4 text-amber-500" />
+                <span className="text-sm font-medium text-amber-600 dark:text-amber-400">🔥 Campaign Active! Do not reload.</span>
+              </div>
+            )}
 
 
             {/* Scan QR Button */}

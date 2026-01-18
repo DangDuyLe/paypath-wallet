@@ -107,6 +107,10 @@ interface WalletContextType extends WalletState {
   getDefaultAccount: () => { id: string; type: DefaultAccountType; name: string } | null;
   refreshBalance: () => Promise<void>;
   isValidWalletAddress: (address: string) => boolean;
+  // Campaign session helpers
+  startCampaignSession: () => void;
+  endCampaignSession: () => void;
+  checkCampaignSession: () => boolean;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -531,6 +535,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
+  // Campaign Session Helpers
+  const CAMPAIGN_SESSION_KEY = 'CAMPAIGN_SESSION';
+
+  const startCampaignSession = () => {
+    sessionStorage.setItem(CAMPAIGN_SESSION_KEY, 'active');
+  };
+
+  const endCampaignSession = () => {
+    sessionStorage.removeItem(CAMPAIGN_SESSION_KEY);
+  };
+
+  const checkCampaignSession = (): boolean => {
+    return sessionStorage.getItem(CAMPAIGN_SESSION_KEY) === 'active';
+  };
+
   return (
     <WalletContext.Provider value={{
       ...state,
@@ -549,6 +568,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       getDefaultAccount,
       refreshBalance,
       isValidWalletAddress,
+      startCampaignSession,
+      endCampaignSession,
+      checkCampaignSession,
     }}>
       {children}
     </WalletContext.Provider>
