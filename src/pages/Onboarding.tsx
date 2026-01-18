@@ -71,11 +71,21 @@ const Onboarding = () => {
         throw new Error('No wallet connected');
       }
 
-      await postRegister({
-        walletAddress: currentAccount.address,
-        username: clean,
-        email: email || undefined,
-      });
+      try {
+        await postRegister({
+          walletAddress: currentAccount.address,
+          username: clean,
+          email: email || undefined,
+        });
+      } catch (err: unknown) {
+        const e = err as { response?: { status?: number }; message?: string };
+        const status = e?.response?.status;
+        const message = typeof e?.message === 'string' ? e.message : '';
+
+        if (status !== 409 && !message.includes('status code 409')) {
+          throw err;
+        }
+      }
 
       setUsername(clean);
       navigate('/dashboard');

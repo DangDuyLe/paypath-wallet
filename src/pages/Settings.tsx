@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
-import { Wallet, Building2, Scan, Check, Trash2, Star, Shield, LogOut, Loader2, AlertTriangle, ChevronLeft, Copy } from 'lucide-react';
+import { Wallet, Building2, Scan, Check, Trash2, Shield, LogOut, Loader2, AlertTriangle, ChevronLeft, Copy } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
 import { useDisconnectWallet } from '@mysten/dapp-kit';
 import * as gaian from '@/services/gaian';
@@ -15,12 +15,15 @@ interface ScannedBankData {
 
 const Settings = () => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, isAuthenticated, user } = useAuth();
+  const apiUsername = (() => {
+    const u = user as { username?: unknown } | null;
+    return typeof u?.username === 'string' ? u.username : null;
+  })();
   const { mutate: disconnectSuiWallet } = useDisconnectWallet();
   const {
     username,
     disconnect,
-    isConnected,
     linkedBanks,
     linkedWallets,
     defaultAccountId,
@@ -43,8 +46,13 @@ const Settings = () => {
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState('');
 
-  if (!isConnected || !username) {
-    navigate('/');
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, navigate]);
+
+  if (!isAuthenticated) {
     return null;
   }
 
@@ -356,7 +364,7 @@ const Settings = () => {
         {/* Profile */}
         <div className="pb-6 border-b border-border mb-6 animate-slide-up">
           <p className="label-caps mb-2">Username</p>
-          <p className="display-medium">@{username}</p>
+          <p className="display-medium">@{apiUsername ?? username ?? ''}</p>
         </div>
 
         {/* Wallets */}

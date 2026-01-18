@@ -1,3 +1,4 @@
+import { useAuth } from '@/context/AuthContext';
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
@@ -22,6 +23,7 @@ interface ExternalBankInfo {
 const Send = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, isAuthLoading, user } = useAuth();
   const {
     sendUsdc,
     suiBalance,
@@ -69,9 +71,55 @@ const Send = () => {
   const [externalBank, setExternalBank] = useState<ExternalBankInfo | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  if (!isConnected || !username) {
-    navigate('/');
+  useEffect(() => {
+    if (!isAuthLoading && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthLoading, isAuthenticated, navigate]);
+
+  const apiUsername = (() => {
+    const u = user as { username?: unknown } | null;
+    return typeof u?.username === 'string' ? u.username : null;
+  })();
+
+  if (isAuthLoading) {
+    return (
+      <div className="app-container">
+        <div className="page-wrapper">
+          <div className="card-modern py-8 text-center text-muted-foreground text-sm">
+            Loading...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
     return null;
+  }
+
+  if (!isConnected) {
+    return (
+      <div className="app-container">
+        <div className="page-wrapper">
+          <div className="card-modern py-8 text-center text-muted-foreground text-sm">
+            Wallet not connected.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!apiUsername && !username) {
+    return (
+      <div className="app-container">
+        <div className="page-wrapper">
+          <div className="card-modern py-8 text-center text-muted-foreground text-sm">
+            Loading profile...
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const allSources = [

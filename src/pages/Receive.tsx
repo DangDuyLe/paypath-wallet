@@ -1,17 +1,41 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 import { useState } from 'react';
 import { Copy, Share2, Check, X } from 'lucide-react';
 
 const Receive = () => {
   const navigate = useNavigate();
-  const { username, walletAddress, isConnected } = useWallet();
+  const { user } = useAuth();
+  const { username: walletUsername, walletAddress, isConnected } = useWallet();
+
+  const username = (() => {
+    const u = user as { username?: unknown } | null;
+    return typeof u?.username === 'string' ? u.username : walletUsername;
+  })();
   const [copiedUsername, setCopiedUsername] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
-  if (!isConnected || !username) {
-    navigate('/');
-    return null;
+
+
+  if (!isConnected) {
+    return (
+      <div className="app-container">
+        <div className="page-wrapper">
+          <div className="card-modern py-8 text-center text-muted-foreground text-sm">Wallet not connected.</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!username) {
+    return (
+      <div className="app-container">
+        <div className="page-wrapper">
+          <div className="card-modern py-8 text-center text-muted-foreground text-sm">Loading profile...</div>
+        </div>
+      </div>
+    );
   }
 
   const handleCopyUsername = () => {

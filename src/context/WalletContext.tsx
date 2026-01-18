@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { useSignAndExecuteTransaction, useSuiClient, useCurrentAccount } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
-import { getProfile } from '@/services/api';
+
 
 // Testnet USDC via Aftermath Faucet
 const USDC_COIN_TYPE = "0xcdd397f2cffb7f5d439f56fc01afe5585c5f06e3bcd2ee3a21753c566de313d9::usdc::USDC";
@@ -112,13 +112,7 @@ type WalletContextType = WalletState & {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-const mockTransactions: TransactionRecord[] = [
-  { id: '1', type: 'sent', to: '@alice', amount: 10, timestamp: new Date(Date.now() - 3600000), token: 'USDC', digest: '5Am7kZ...9zXq' },
-  { id: '2', type: 'received', from: '@bob', amount: 25.5, timestamp: new Date(Date.now() - 7200000), token: 'USDC', digest: '8Bc3mL...4wYn' },
-  { id: '3', type: 'sent', to: '@charlie', amount: 5, timestamp: new Date(Date.now() - 86400000), token: 'USDC', digest: '2Dp9nR...7vTm' },
-  { id: '4', type: 'received', from: '@dave', amount: 100, timestamp: new Date(Date.now() - 172800000), token: 'USDC', digest: '6Eq5oS...1uWp' },
-  { id: '5', type: 'sent', to: '@eve', amount: 15.75, timestamp: new Date(Date.now() - 259200000), token: 'USDC', digest: '9Fr2pT...3xKo' },
-];
+
 
 // Exchange rate: 1 USDC = 25,500 VND
 const USDC_TO_VND_RATE = 25500;
@@ -141,52 +135,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     contacts: ['@alice', '@bob'],
     kycStatus: 'unverified',
     isLoadingBalance: false,
-    isProfileLoading: true,
-    rewardPoints: 1250,
-    referralStats: { totalCommission: 15.5, f0Volume: 50000, f0Count: 12 },
+    isProfileLoading: false,
+    rewardPoints: 0,
+    referralStats: { totalCommission: 0, f0Volume: 0, f0Count: 0 },
   });
 
   // Fetch REAL balances and transactions from blockchain
-  const refreshBalance = useCallback(async () => {
-    if (!currentAccount?.address) return;
-
-    setState(prev => ({ ...prev, isLoadingBalance: true }));
-
-    try {
-      // Get SUI balance (for gas fees)
-      const suiBalanceResult = await suiClient.getBalance({
-        owner: currentAccount.address,
-      });
-      // SUI has 9 decimals
-      const suiBalance = Number(suiBalanceResult.totalBalance) / 1_000_000_000;
-
-      // Get USDC balance
-      const usdcBalanceResult = await suiClient.getBalance({
-        owner: currentAccount.address,
-        coinType: USDC_COIN_TYPE,
-      });
-      // USDC - divide by 10^USDC_DECIMALS
-      const usdcBalance = Number(usdcBalanceResult.totalBalance) / Math.pow(10, USDC_DECIMALS);
-
-      // Fetch recent transactions
-      const txHistory = await fetchTransactions(currentAccount.address);
-
-      setState(prev => ({
-        ...prev,
-        suiBalance,
-        usdcBalance,
-        balanceVnd: usdcBalance * USDC_TO_VND_RATE,
-        transactions: txHistory.length > 0 ? txHistory : prev.transactions,
-        isLoadingBalance: false,
-      }));
-    } catch (error) {
-      console.error('Failed to fetch balance:', error);
-      setState(prev => ({ ...prev, isLoadingBalance: false }));
-    }
-  }, [currentAccount?.address, suiClient]);
-
   // Fetch real transaction history from blockchain
-  const fetchTransactions = async (address: string): Promise<TransactionRecord[]> => {
+  const fetchTransactions = useCallback(async (address: string): Promise<TransactionRecord[]> => {
     try {
       // Query transactions where user is sender
       const sentTxs = await suiClient.queryTransactionBlocks({
@@ -224,6 +180,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 amount,
                 timestamp: new Date(Number(tx.timestampMs)),
                 token: 'USDC',
+                digest: tx.digest,
               });
             }
           }
@@ -237,44 +194,73 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         for (const change of balanceChanges) {
           if (change.coinType === USDC_COIN_TYPE && change.owner && typeof change.owner === 'object' && 'AddressOwner' in change.owner) {
             const ownerAddr = change.owner.AddressOwner;
-            const amount = Number(change.amount) / Math.pow(10, USDC_DECIMALS);
+            const amount = Math.abs(Number(change.amount)) / Math.pow(10, USDC_DECIMALS);
 
             if (amount > 0 && ownerAddr === address) {
-              // Find sender from other balance changes
-              const senderChange = balanceChanges.find(c =>
-                c.coinType === USDC_COIN_TYPE &&
-                Number(c.amount) < 0 &&
-                c.owner && typeof c.owner === 'object' && 'AddressOwner' in c.owner
-              );
-              const senderAddr = senderChange?.owner && typeof senderChange.owner === 'object' && 'AddressOwner' in senderChange.owner
-                ? senderChange.owner.AddressOwner
-                : 'Unknown';
-
               transactions.push({
                 id: tx.digest,
                 type: 'received',
-                from: senderAddr === 'Unknown' ? senderAddr : senderAddr.slice(0, 6) + '...' + senderAddr.slice(-4),
+                from: 'External',
                 amount,
                 timestamp: new Date(Number(tx.timestampMs)),
                 token: 'USDC',
+                digest: tx.digest,
               });
             }
           }
         }
       }
 
-      // Sort by timestamp descending and remove duplicates
-      const uniqueTxs = transactions.filter((tx, index, self) =>
-        index === self.findIndex(t => t.id === tx.id)
-      );
-      uniqueTxs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      // Sort by timestamp desc
+      transactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-      return uniqueTxs.slice(0, 10);
+      return transactions.slice(0, 10);
     } catch (error) {
       console.error('Failed to fetch transactions:', error);
       return [];
     }
-  };
+  }, [suiClient]);
+
+  // Fetch REAL balances and transactions from blockchain
+  const refreshBalance = useCallback(async () => {
+    if (!currentAccount?.address) return;
+
+    setState(prev => ({ ...prev, isLoadingBalance: true }));
+
+    try {
+      // Get SUI balance (for gas fees)
+      const suiBalanceResult = await suiClient.getBalance({
+        owner: currentAccount.address,
+      });
+      // SUI has 9 decimals
+      const suiBalance = Number(suiBalanceResult.totalBalance) / 1_000_000_000;
+
+      // Get USDC balance
+      const usdcBalanceResult = await suiClient.getBalance({
+        owner: currentAccount.address,
+        coinType: USDC_COIN_TYPE,
+      });
+      // USDC - divide by 10^USDC_DECIMALS
+      const usdcBalance = Number(usdcBalanceResult.totalBalance) / Math.pow(10, USDC_DECIMALS);
+
+      // Fetch recent transactions
+      const txHistory = await fetchTransactions(currentAccount.address);
+
+      setState(prev => ({
+        ...prev,
+        suiBalance,
+        usdcBalance,
+        balanceVnd: usdcBalance * USDC_TO_VND_RATE,
+        transactions: txHistory,
+        isLoadingBalance: false,
+      }));
+    } catch (error) {
+      console.error('Failed to fetch balance:', error);
+      setState(prev => ({ ...prev, isLoadingBalance: false }));
+    }
+  }, [currentAccount?.address, fetchTransactions, suiClient]);
+
+  
 
   // Auto-refresh balance when account connects or changes
   useEffect(() => {
@@ -283,54 +269,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [currentAccount?.address, refreshBalance]);
 
-  // Hydrate profile from backend when JWT exists
+  // Hydrate profile is handled by AuthContext/ProtectedRoute.
   useEffect(() => {
-    const token = localStorage.getItem('jwt_token');
-
-    if (!token) {
-      setState((prev) => ({ ...prev, isProfileLoading: false, username: null }));
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      setState((prev) => ({ ...prev, isProfileLoading: true }));
-      try {
-        const res = await getProfile();
-        const data = res.data as unknown as {
-          username?: unknown;
-          loyaltyPoints?: unknown;
-          commissionBalance?: unknown;
-          refereesCount?: unknown;
-        };
-        if (cancelled) return;
-
-        const username = typeof data?.username === 'string' ? data.username : null;
-        const rewardPoints = typeof data?.loyaltyPoints === 'number' ? data.loyaltyPoints : null;
-        const totalCommission = typeof data?.commissionBalance === 'number' ? data.commissionBalance : null;
-        const f0Count = typeof data?.refereesCount === 'number' ? data.refereesCount : null;
-
-        setState((prev) => ({
-          ...prev,
-          username,
-          rewardPoints: rewardPoints ?? prev.rewardPoints,
-          referralStats: {
-            ...prev.referralStats,
-            totalCommission: totalCommission ?? prev.referralStats.totalCommission,
-            f0Count: f0Count ?? prev.referralStats.f0Count,
-          },
-          isProfileLoading: false,
-        }));
-      } catch {
-        if (cancelled) return;
-        setState((prev) => ({ ...prev, isProfileLoading: false, username: null }));
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    setState((prev) => ({ ...prev, isProfileLoading: false }));
   }, []);
 
   // Validate wallet address format (0x followed by 64 hex chars)
@@ -434,7 +375,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       suiBalance: 0,
       usdcBalance: 0,
       balanceVnd: 0,
-      transactions: mockTransactions,
+      transactions: [],
       linkedBanks: [],
       linkedWallets: [],
       defaultAccountId: null,

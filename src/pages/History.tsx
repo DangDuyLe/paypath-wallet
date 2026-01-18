@@ -1,3 +1,4 @@
+import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { useEffect, useState } from 'react';
@@ -5,10 +6,9 @@ import { ArrowLeft, ArrowDownLeft, ArrowUpRight, RefreshCw, Copy, Check } from '
 
 const History = () => {
     const navigate = useNavigate();
+    const { isAuthenticated, isAuthLoading } = useAuth();
     const {
         transactions,
-        isConnected,
-        username,
         isLoadingBalance,
         refreshBalance,
     } = useWallet();
@@ -16,12 +16,22 @@ const History = () => {
     const [copiedDigest, setCopiedDigest] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!isConnected || !username) {
-            navigate('/');
+        if (!isAuthLoading && !isAuthenticated) {
+            navigate('/login');
         }
-    }, [isConnected, username, navigate]);
+    }, [isAuthLoading, isAuthenticated, navigate]);
 
-    if (!isConnected || !username) {
+    if (isAuthLoading) {
+        return (
+            <div className="app-container">
+                <div className="page-wrapper">
+                    <div className="card-modern py-8 text-center text-muted-foreground text-sm">Loading...</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!isAuthenticated) {
         return null;
     }
 

@@ -1,3 +1,4 @@
+import { useAuth } from '@/context/AuthContext';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
@@ -14,14 +15,19 @@ interface LeaderboardUser {
 
 const Leaderboard = () => {
     const navigate = useNavigate();
-    const { username, isConnected, rewardPoints } = useWallet();
+    const { isAuthenticated, isAuthLoading, user } = useAuth();
     const [activeTab, setActiveTab] = useState<'month' | 'all-time'>('month');
 
     useEffect(() => {
-        if (!isConnected || !username) {
-            navigate('/');
+        if (!isAuthLoading && !isAuthenticated) {
+            navigate('/login');
         }
-    }, [isConnected, username, navigate]);
+    }, [isAuthLoading, isAuthenticated, navigate]);
+
+    const rewardPoints = (() => {
+        const u = user as { loyaltyPoints?: unknown } | null;
+        return typeof u?.loyaltyPoints === 'number' ? u.loyaltyPoints : 0;
+    })();
 
     // Mock Data Generation
     const generateMockData = (tab: 'month' | 'all-time'): LeaderboardUser[] => {

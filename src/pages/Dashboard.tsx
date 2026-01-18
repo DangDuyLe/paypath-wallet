@@ -1,36 +1,60 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { useEffect, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { useMemo, useState } from 'react';
 import { ArrowUpRight, ArrowDownLeft, Eye, EyeOff, Copy, Check, Users, TrendingUp, Award, Trophy } from 'lucide-react';
 
 const Dashboard = () => {
     const navigate = useNavigate();
+    const { isAuthenticated, isAuthLoading, user } = useAuth();
+
     const {
-        username,
         usdcBalance,
         suiBalance,
         transactions,
         isConnected,
         isLoadingBalance,
-        isProfileLoading,
-        refreshBalance,
-        rewardPoints,
-        referralStats,
     } = useWallet();
+const rewardPoints = useMemo(() => {
+        const u = user as { loyaltyPoints?: unknown } | null;
+        return typeof u?.loyaltyPoints === 'number' ? u.loyaltyPoints : 0;
+    }, [user]);
+
+    const referralStats = useMemo(() => {
+        const u = user as { commissionBalance?: unknown; f0Volume?: unknown; refereesCount?: unknown } | null;
+
+        const totalCommission = typeof u?.commissionBalance === 'number' ? u.commissionBalance : 0;
+        const f0Volume = typeof u?.f0Volume === 'number' ? u.f0Volume : 0;
+        const f0Count = typeof u?.refereesCount === 'number' ? u.refereesCount : 0;
+
+        return { totalCommission, f0Volume, f0Count };
+    }, [user]);
+
+    const username = useMemo(() => {
+        const u = user as { username?: unknown } | null;
+        return typeof u?.username === 'string' && u.username.length > 0 ? u.username : null;
+    }, [user]);
 
     const [showBalance, setShowBalance] = useState(true);
     const [copiedDigest, setCopiedDigest] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (!isProfileLoading && !isConnected) {
-            navigate('/login');
-        }
-    }, [isConnected, isProfileLoading, navigate]);
-
-    if (isProfileLoading) {
+    if (isAuthLoading) {
         return (
             <div className="app-container flex items-center justify-center h-screen">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
+            </div>
+        );
+    }
+
+    if (!isAuthenticated) {
+        return (
+            <div className="app-container flex items-center justify-center h-screen">
+                <div className="text-center">
+                    <div className="text-lg font-semibold">Chưa đăng nhập</div>
+                    <button className="btn btn-primary mt-4" onClick={() => navigate('/login')}>
+                        Quay lại Login
+                    </button>
+                </div>
             </div>
         );
     }
@@ -41,10 +65,7 @@ const Dashboard = () => {
                 <div className="text-center">
                     <div className="text-lg font-semibold">Wallet chưa connect</div>
                     <div className="text-sm opacity-70 mt-1">Bạn cần connect ví Sui để xem Dashboard.</div>
-                    <button
-                        className="btn btn-primary mt-4"
-                        onClick={() => navigate('/login')}
-                    >
+                    <button className="btn btn-primary mt-4" onClick={() => navigate('/login')}>
                         Quay lại Login
                     </button>
                 </div>
@@ -55,7 +76,10 @@ const Dashboard = () => {
     if (!username) {
         return (
             <div className="app-container flex items-center justify-center h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
+                <div className="text-center">
+                    <div className="text-lg font-semibold">Đang tải hồ sơ</div>
+                    <div className="text-sm opacity-70 mt-1">Vui lòng đợi...</div>
+                </div>
             </div>
         );
     }
