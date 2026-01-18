@@ -8,7 +8,7 @@ A minimalist Sui Blockchain Wallet WebApp for the Sui Hackathon.
 - **Username System**: Claim a unique @username for easy payments
 - **Send SUI**: Send to HiddenWallet usernames or scan VietQR codes
 - **QR Scanner**: Camera-based QR scanning for payments
-- **Bank Linking**: Link bank accounts via QR code
+- **Bank Linking**: Link bank accounts via QR code.
 
 ## Tech Stack
 
