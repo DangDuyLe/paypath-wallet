@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { ConnectButton, useCurrentAccount, useDisconnectWallet } from '@mysten/dapp-kit';
+import { ConnectButton, useCurrentAccount, useDisconnectWallet, useAccounts } from '@mysten/dapp-kit';
 import { useEffect, useState } from 'react';
 import { Copy, Check, LogOut, Wallet, ChevronRight } from 'lucide-react';
 
@@ -22,6 +22,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { connectWallet, isConnected, username, disconnect } = useWallet();
   const currentAccount = useCurrentAccount();
+  const accounts = useAccounts();
   const { mutate: disconnectSuiWallet } = useDisconnectWallet();
   const [hasClickedConnect, setHasClickedConnect] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -29,21 +30,24 @@ const Login = () => {
   const [copied, setCopied] = useState(false);
   const [showWalletOptions, setShowWalletOptions] = useState(false);
 
+  // Use currentAccount if valid, otherwise fallback to first account if available
+  const activeAccount = currentAccount || (accounts.length > 0 ? accounts[0] : null);
+
   useEffect(() => {
     setIsMobile(isMobileDevice());
     setIsInWalletBrowser(isInSlushBrowser());
   }, []);
 
   useEffect(() => {
-    if (currentAccount && hasClickedConnect) {
-      connectWallet(currentAccount.address);
+    if (activeAccount && hasClickedConnect) {
+      connectWallet(activeAccount.address);
       if (username) {
         navigate('/dashboard');
       } else {
         navigate('/onboarding');
       }
     }
-  }, [currentAccount, hasClickedConnect, connectWallet, navigate, username]);
+  }, [activeAccount, hasClickedConnect, connectWallet, navigate, username]);
 
   useEffect(() => {
     if (isConnected && username) {
@@ -53,7 +57,7 @@ const Login = () => {
 
   const handleConnectClick = () => {
     // If already connected, show options instead of auto-navigating
-    if (currentAccount) {
+    if (activeAccount) {
       setShowWalletOptions(true);
       return;
     }
@@ -61,8 +65,8 @@ const Login = () => {
   };
 
   const handleContinueWithWallet = () => {
-    if (currentAccount) {
-      connectWallet(currentAccount.address);
+    if (activeAccount) {
+      connectWallet(activeAccount.address);
       if (username) {
         navigate('/dashboard');
       } else {
@@ -106,7 +110,7 @@ const Login = () => {
         {/* Bottom section */}
         <div className="space-y-4 animate-slide-up pb-6">
           {/* Priority: Show connected options first, then mobile instructions, then default */}
-          {currentAccount ? (
+          {activeAccount ? (
             /* Connected Wallet Options Card */
             <div className="card-modern p-5 space-y-4 animate-fade-in">
               <div className="flex items-center gap-3">
@@ -116,7 +120,7 @@ const Login = () => {
                 <div className="flex-1">
                   <p className="font-medium">Connected Wallet</p>
                   <p className="text-sm text-muted-foreground font-mono">
-                    {currentAccount.address.slice(0, 8)}...{currentAccount.address.slice(-6)}
+                    {activeAccount.address.slice(0, 8)}...{activeAccount.address.slice(-6)}
                   </p>
                 </div>
               </div>
