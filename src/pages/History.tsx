@@ -116,7 +116,7 @@ const History = () => {
                                                     <div className="flex items-center gap-1">
                                                         <span className="text-xs text-muted-foreground">•</span>
                                                         <a
-                                                            href={`https://suiscan.xyz/testnet/tx/${txHash}`}
+                                                            href={`https://suiscan.xyz/mainnet/tx/${txHash}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="text-xs text-muted-foreground font-mono hover:text-foreground hover:underline transition-colors"
