@@ -32,6 +32,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Add response error interceptor for better debugging
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response) {
+      console.error('API Error Details:', {
+        status: error.response.status,
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.response.data,
+        request: error.config?.data,
+      });
+    }
+    return Promise.reject(error);
+  }
+);
+
 export type WalletChallengeResponseDto = {
   nonce: string;
   expiresAt: string;

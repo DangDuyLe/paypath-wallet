@@ -96,7 +96,7 @@ const QRScanner = ({ isOpen, onClose, onScan, title = 'Scan QR Code' }: QRScanne
 
     const canvas = canvasRef.current;
     const video = videoRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     if (!ctx) return;
 

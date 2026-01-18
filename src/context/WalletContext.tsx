@@ -312,12 +312,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return { success: false };
       }
 
+      // Calculate total balance across all coins
+      const totalBalance = coins.data.reduce((sum, coin) => sum + BigInt(coin.balance), BigInt(0));
+
+      // Check if total balance is sufficient
+      if (totalBalance < amountInSmallestUnit) {
+        console.error(`Insufficient balance. Required: ${amountInSmallestUnit}, Available: ${totalBalance}`);
+        return { success: false };
+      }
+
       const tx = new Transaction();
 
-      // Get the primary coin
+      // Merge all coins into one to ensure sufficient balance
       const primaryCoin = coins.data[0];
+      const restCoins = coins.data.slice(1);
 
-      // Split the exact amount from the coin
+      if (restCoins.length > 0) {
+        // Merge all other coins into the primary coin
+        tx.mergeCoins(
+          tx.object(primaryCoin.coinObjectId),
+          restCoins.map(coin => tx.object(coin.coinObjectId))
+        );
+      }
+
+      // Split the exact amount from the merged coin
       const [coinToSend] = tx.splitCoins(tx.object(primaryCoin.coinObjectId), [
         tx.pure.u64(amountInSmallestUnit),
       ]);

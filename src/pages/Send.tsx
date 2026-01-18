@@ -405,7 +405,17 @@ const Send = () => {
         }
 
         // 3. Confirm payment with transaction digest
-        await confirmPaymentOrder(orderId, result.digest);
+        try {
+          console.log('Confirming payment order:', { orderId, digest: result.digest });
+          await confirmPaymentOrder(orderId, result.digest);
+        } catch (confirmError) {
+          console.error('Failed to confirm payment order:', confirmError);
+          // Transaction succeeded but confirmation failed
+          // User still gets their money, just backend tracking failed
+          setError('Transaction succeeded but confirmation failed. Please contact support with transaction: ' + result.digest);
+          setStep('error');
+          return;
+        }
 
         setStep('success');
         return;

@@ -120,7 +120,11 @@ const Dashboard = () => {
     const balanceWhole = Math.floor(usdcBalance);
     const balanceDecimal = (usdcBalance - balanceWhole).toFixed(2).slice(1); // .00
 
-    const recentTransactions = transactions.slice(0, 3);
+    // Remove duplicates based on transaction ID
+    const uniqueTransactions = Array.from(
+        new Map(transactions.map(tx => [tx.id, tx])).values()
+    );
+    const recentTransactions = uniqueTransactions.slice(0, 3);
 
     return (
         <div className="app-container">
