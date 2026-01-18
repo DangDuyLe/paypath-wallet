@@ -120,7 +120,7 @@ const { loginWithWallet, isAuthLoading } = useAuth();
               </div>
 
               <button
-                onClick={handleContinueWithWallet}
+                onClick={handleAuthLogin}
                 className="btn-primary flex items-center justify-center gap-2"
               >
                 Continue to App
