@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
-import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2, X, User, AlertCircle, CreditCard, Copy, Zap } from 'lucide-react';
+import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2, X, User, AlertCircle, CreditCard, Copy, Zap, PartyPopper, Gift } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
 import * as gaian from '@/services/gaian';
 import { toast } from '@/components/ui/sonner';
@@ -38,6 +38,7 @@ const Send = () => {
     isValidWalletAddress,
     checkCampaignSession,
     endCampaignSession,
+    processTransactionReward,
   } = useWallet();
 
   const [step, setStep] = useState<SendStep>('input');
@@ -76,6 +77,10 @@ const Send = () => {
   const [isCampaignMode, setIsCampaignMode] = useState(false);
   const [sessionChecked, setSessionChecked] = useState(false);
   const hasShownToast = useRef(false);
+
+  // Jackpot State
+  const [jackpotAmount, setJackpotAmount] = useState<number | null>(null);
+  const [showJackpotModal, setShowJackpotModal] = useState(false);
 
   // Check campaign session on mount, cleanup on unmount
   useEffect(() => {
@@ -311,6 +316,19 @@ const Send = () => {
       const result = await sendUsdc(toAddress, parseFloat(amount));
 
       if (result.success) {
+        // Process Reward (Mock)
+        const reward = processTransactionReward('off-ramp');
+
+        if (reward.status === 'won' && reward.amount) {
+          setJackpotAmount(reward.amount);
+          setShowJackpotModal(true);
+          // Don't step to success yet, let them claim? Or step to success AND show modal layered
+          // We'll show modal ON TOP of success screen
+        } else if (reward.status === 'lost' && isCampaignMode) {
+          toast.info('Better luck next time! 🍀', { duration: 3000 });
+        } else if (reward.status === 'already_won') {
+          toast.info('You have already claimed your reward for this event.', { duration: 3000 });
+        }
 
         setStep('success');
       } else {
@@ -379,6 +397,49 @@ const Send = () => {
             <div className="w-16 h-16 mx-auto mb-6 flex items-center justify-center bg-success/10 rounded-full">
               <Check className="w-8 h-8 text-success" />
             </div>
+
+            {/* Jackpot Modal */}
+            {showJackpotModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+                <div className="bg-card border border-amber-500/50 rounded-2xl w-full max-w-sm shadow-2xl animate-zoom-in relative overflow-hidden">
+                  {/* Background Effects */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none" />
+
+                  <div className="p-6 text-center space-y-4 relative z-10">
+                    <div className="w-20 h-20 mx-auto bg-gradient-to-br from-amber-400 to-orange-600 rounded-full flex items-center justify-center shadow-lg animate-bounce">
+                      <PartyPopper className="w-10 h-10 text-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <h2 className="text-3xl font-black bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 bg-clip-text text-transparent animate-pulse">
+                        🎉 JACKPOT!
+                      </h2>
+                      <p className="text-muted-foreground">
+                        You just won <strong className="text-foreground text-lg">${jackpotAmount} USDC</strong>
+                        <br />from Flash Airdrop!
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-secondary/50 rounded-xl border border-border/50">
+                      <div className="flex items-center gap-3">
+                        <Gift className="w-8 h-8 text-amber-500" />
+                        <div className="text-left">
+                          <p className="text-xs text-muted-foreground uppercase font-semibold">Reward Added</p>
+                          <p className="font-bold">+{jackpotAmount} USDC</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setShowJackpotModal(false)}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold text-lg hover:brightness-110 transition-all shadow-lg active:scale-95"
+                    >
+                      Awesome! 🤩
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <p className="text-xl font-bold mb-2">Sent!</p>
             <p className="text-2xl font-bold">{amount} USDC</p>
             <p className="text-muted-foreground mt-1 text-sm">to {recipientDisplayName || recipient}</p>

@@ -111,7 +111,19 @@ interface WalletContextType extends WalletState {
   startCampaignSession: () => void;
   endCampaignSession: () => void;
   checkCampaignSession: () => boolean;
+  processTransactionReward: (txType: string) => { status: 'won' | 'lost' | 'skipped' | 'already_won'; amount?: number; message?: string };
 }
+
+interface RewardResult {
+  status: 'won' | 'lost' | 'skipped' | 'already_won';
+  amount?: number;
+  message?: string;
+}
+
+const CAMPAIGN_SESSION_KEY = 'CAMPAIGN_SESSION';
+const WINNERS_STORAGE_KEY = 'PAYPATH_WINNERS';
+const GLOBAL_COUNTER_KEY = 'PAYPATH_GLOBAL_COUNTER';
+const PRIZE_POOL_KEY = 'PAYPATH_PRIZE_POOL';
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
@@ -149,6 +161,74 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     rewardPoints: 1250,
     referralStats: { totalCommission: 15.5, f0Volume: 50000, f0Count: 12 },
   });
+
+  // Initialize Reward Data (Mock Backend)
+  useEffect(() => {
+    if (!localStorage.getItem(PRIZE_POOL_KEY)) {
+      const initialPool = [2, 2, 4, 5, 2, 3, 5, 2, 2, 4, 5, 2, 3, 5]; // Prize amounts
+      localStorage.setItem(PRIZE_POOL_KEY, JSON.stringify(initialPool));
+    }
+    if (!localStorage.getItem(GLOBAL_COUNTER_KEY)) {
+      localStorage.setItem(GLOBAL_COUNTER_KEY, '0');
+    }
+  }, []);
+
+  const processTransactionReward = (txType: string): RewardResult => {
+    // Step 1: Check session
+    if (!sessionStorage.getItem(CAMPAIGN_SESSION_KEY)) {
+      return { status: 'skipped' };
+    }
+
+    // Always clear session after this check (End Session)
+    sessionStorage.removeItem(CAMPAIGN_SESSION_KEY);
+
+    // Step 2: Check if already won
+    const username = state.username;
+    if (!username) return { status: 'skipped' };
+
+    const winnersJson = localStorage.getItem(WINNERS_STORAGE_KEY);
+    const winners: string[] = winnersJson ? JSON.parse(winnersJson) : [];
+
+    if (winners.includes(username)) {
+      return { status: 'already_won' };
+    }
+
+    // Step 3: Increment Global Counter
+    const currentCounter = parseInt(localStorage.getItem(GLOBAL_COUNTER_KEY) || '0');
+    const newCounter = currentCounter + 1;
+    localStorage.setItem(GLOBAL_COUNTER_KEY, newCounter.toString());
+
+    // Step 4: Win Condition (Every 4th transaction)
+    if (newCounter % 4 === 0) {
+      // Pop prize from pool
+      const poolJson = localStorage.getItem(PRIZE_POOL_KEY);
+      const pool: number[] = poolJson ? JSON.parse(poolJson) : [];
+
+      if (pool.length === 0) {
+        return { status: 'lost', message: 'Pool empty' };
+      }
+
+      const prizeAmount = pool.shift(); // Remove first item
+      localStorage.setItem(PRIZE_POOL_KEY, JSON.stringify(pool));
+
+      if (prizeAmount) {
+        // Add winner
+        winners.push(username);
+        localStorage.setItem(WINNERS_STORAGE_KEY, JSON.stringify(winners));
+
+        // Update Balance (Artificially)
+        setState(prev => ({
+          ...prev,
+          usdcBalance: prev.usdcBalance + prizeAmount, // Add prize
+          balanceVnd: (prev.usdcBalance + prizeAmount) * USDC_TO_VND_RATE
+        }));
+
+        return { status: 'won', amount: prizeAmount };
+      }
+    }
+
+    return { status: 'lost' };
+  };
 
   // Fetch REAL balances and transactions from blockchain
   const refreshBalance = useCallback(async () => {
@@ -550,6 +630,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return sessionStorage.getItem(CAMPAIGN_SESSION_KEY) === 'active';
   };
 
+
+
   return (
     <WalletContext.Provider value={{
       ...state,
@@ -571,6 +653,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       startCampaignSession,
       endCampaignSession,
       checkCampaignSession,
+      processTransactionReward,
     }}>
       {children}
     </WalletContext.Provider>
