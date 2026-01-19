@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 import { useMemo, useState } from 'react';
-import { ArrowUpRight, ArrowDownLeft, Eye, EyeOff, Copy, Check, Users, TrendingUp, Award, Trophy } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, Eye, EyeOff, Copy, Check, Users, Award, Trophy, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Dashboard = () => {
@@ -22,13 +22,14 @@ const Dashboard = () => {
     }, [user]);
 
     const referralStats = useMemo(() => {
-        const u = user as { commissionBalance?: unknown; f0Volume?: unknown; refereesCount?: unknown } | null;
+        const u = user as { commissionBalance?: unknown; f0Volume?: unknown; refereesCount?: unknown; loyaltyTier?: unknown } | null;
 
         const totalCommission = typeof u?.commissionBalance === 'number' ? u.commissionBalance : 0;
         const f0Volume = typeof u?.f0Volume === 'number' ? u.f0Volume : 0;
         const f0Count = typeof u?.refereesCount === 'number' ? u.refereesCount : 0;
+        const loyaltyTier = typeof u?.loyaltyTier === 'string' ? u.loyaltyTier : 'Standard';
 
-        return { totalCommission, f0Volume, f0Count };
+        return { totalCommission, f0Volume, f0Count, loyaltyTier };
     }, [user]);
 
     const username = useMemo(() => {
@@ -247,24 +248,24 @@ const Dashboard = () => {
                                 <p className="text-lg font-bold">${referralStats.totalCommission}</p>
                                 <p className="text-xs text-muted-foreground">Earned</p>
                             </div>
-                            {/* Volume */}
-                            <div className="py-2 border-l border-r border-border relative group cursor-pointer" onClick={() => navigate('/leaderboard')}>
-                                <div className="absolute inset-x-2 -top-2 -bottom-2 bg-secondary/50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                                <div className="relative flex items-center justify-center gap-1.5 mb-1">
-                                    <Trophy className="w-4 h-4 text-amber-500" />
+                            {/* Tier */}
+                            <div className="py-2 border-l border-r border-border">
+                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                                    <Crown className="w-4 h-4 text-amber-500" />
                                 </div>
-                                <div className="relative">
-                                    <p className="text-lg font-bold">{formatVolume(referralStats.f0Volume)}</p>
-                                    <p className="text-xs text-muted-foreground">Volume</p>
+                                <div>
+                                    <p className="text-lg font-bold">{referralStats.loyaltyTier}</p>
+                                    <p className="text-xs text-muted-foreground">Tier</p>
                                 </div>
                             </div>
                             {/* Network */}
-                            <div className="py-2">
-                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                            <div className="py-2 relative group cursor-pointer" onClick={() => navigate('/leaderboard')}>
+                                <div className="absolute inset-x-2 -top-2 -bottom-2 bg-secondary/50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <div className="relative flex items-center justify-center gap-1.5 mb-1">
                                     <Users className="w-4 h-4 text-success" />
                                 </div>
-                                <p className="text-lg font-bold">{referralStats.f0Count}</p>
-                                <p className="text-xs text-muted-foreground">F0 Friends</p>
+                                <p className="relative text-lg font-bold">{referralStats.f0Count}</p>
+                                <p className="relative text-xs text-muted-foreground">Friends</p>
                             </div>
                         </div>
                     </div>
