@@ -620,8 +620,8 @@ const Send = () => {
                 <div className="flex justify-between items-center py-3">
                   <span className="text-muted-foreground text-sm">Fee</span>
                   <span className="text-sm">
-                    {offrampQuote?.platformFee?.cryptoEquivalent != null
-                      ? `${Number(offrampQuote.platformFee.cryptoEquivalent).toFixed(4)} USDC`
+                    {offrampQuote?.platformFee?.feeAmount != null
+                      ? `$${Number(offrampQuote.platformFee.feeAmount).toLocaleString()}`
                       : '-'
                     }
                   </span>
