@@ -91,7 +91,7 @@ const Send = () => {
     platformFee?: { feePercent: string; feeRate: number; feeAmount: number; baseFiatAmount: number; finalFiatAmount: number; cryptoEquivalent?: number | null };
     paymentInstruction: { totalCrypto: string };
   } | null>(null);
-const [showKycPopup, setShowKycPopup] = useState(false);
+  const [showKycPopup, setShowKycPopup] = useState(false);
 
   const openKycPopup = (msg?: string) => {
     if (msg) setError(msg);
@@ -108,7 +108,7 @@ const [showKycPopup, setShowKycPopup] = useState(false);
     const u = user as { username?: unknown } | null;
     return typeof u?.username === 'string' ? u.username : null;
   })();
-const kycApproved = (() => {
+  const kycApproved = (() => {
     const u = user as { kycStatus?: unknown } | null;
     return typeof u?.kycStatus === 'string' && u.kycStatus === 'approved';
   })();
@@ -401,7 +401,7 @@ const kycApproved = (() => {
     const qrStringToUse = scannedQrString || recipientOffchainQr;
 
     if ((scanResult === 'external' && externalBank) || qrStringToUse) {
-const isVnRecipient = (recipientCountry ?? '').toUpperCase() === 'VN';
+      const isVnRecipient = (recipientCountry ?? '').toUpperCase() === 'VN';
       if (kycApproved) {
         if (amountNum < 0.7) { setError('Minimum amount per transaction is $0.7'); return; }
         if (amountNum > 500) { setError('Maximum amount per transaction is $500'); return; }
@@ -704,24 +704,33 @@ const isVnRecipient = (recipientCountry ?? '').toUpperCase() === 'VN';
   return (
     <>
       <AlertDialog open={showKycPopup} onOpenChange={setShowKycPopup}>
-        <AlertDialogContent className="max-w-[420px] rounded-2xl p-0 overflow-hidden">
-          <div className="p-5 border-b border-border">
-            <AlertDialogHeader className="space-y-2 text-left">
-              <AlertDialogTitle className="text-base font-semibold">KYC Required</AlertDialogTitle>
-              <AlertDialogDescription className="text-sm leading-5">
-                You need to complete KYC verification to proceed. Go to Settings to start KYC and unlock higher limits.
+        <AlertDialogContent className="max-w-[340px] rounded-2xl border border-border bg-background p-0 gap-0 shadow-xl">
+          {/* Content */}
+          <div className="p-6 text-center">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+              <AlertCircle className="w-6 h-6 text-amber-500" />
+            </div>
+            <AlertDialogHeader className="space-y-2">
+              <AlertDialogTitle className="text-lg font-semibold">
+                Verification Required
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-muted-foreground">
+                Complete KYC to unlock this feature and access higher limits.
               </AlertDialogDescription>
             </AlertDialogHeader>
           </div>
 
-          <div className="p-5">
-            <AlertDialogFooter className="flex flex-row justify-end gap-2">
-              <AlertDialogCancel className="mt-0 rounded-full px-4">Not now</AlertDialogCancel>
-              <AlertDialogAction className="rounded-full px-5" onClick={() => navigate('/settings')}
-              >
-                Start KYC
-              </AlertDialogAction>
-            </AlertDialogFooter>
+          {/* Actions - matching app button style */}
+          <div className="p-4 pt-0 flex gap-3">
+            <AlertDialogCancel className="flex-1 h-12 rounded-full border border-border bg-background hover:bg-secondary text-sm font-medium">
+              Later
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="flex-1 h-12 rounded-full bg-foreground text-background hover:bg-foreground/90 text-sm font-medium"
+              onClick={() => navigate('/settings')}
+            >
+              Verify Now
+            </AlertDialogAction>
           </div>
         </AlertDialogContent>
       </AlertDialog>

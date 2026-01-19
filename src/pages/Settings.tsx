@@ -81,6 +81,8 @@ const Settings = () => {
   const [scannedBank, setScannedBank] = useState<ScannedBankData | null>(null);
   const [copiedWalletId, setCopiedWalletId] = useState<string | null>(null);
   const autoSaveAttempted = useRef<string | null>(null);
+  const [kycUrl, setKycUrl] = useState<string | null>(null);
+  const [showKycModal, setShowKycModal] = useState(false);
 
   // Create unified display list: include currentAccount if not already in linkedWallets
   const displayWallets = (() => {
@@ -392,14 +394,14 @@ const Settings = () => {
       const res = await getKycLink({ walletAddress: walletAddressForKyc });
       const url = res.data?.kycLink || res.data?.url;
       if (url) {
-        window.open(url, '_blank', 'noopener,noreferrer');
+        // Open in-app browser instead of new tab
+        setKycUrl(url);
+        setShowKycModal(true);
         setKycStatus('pending');
       } else {
-        console.error('No KYC URL in response:', res.data);
         setSettingsError('Failed to get KYC link');
       }
     } catch (e) {
-      console.error('Failed to start KYC', e);
       setSettingsError('Failed to start KYC');
     } finally {
       setIsLoadingSettings(false);
@@ -657,193 +659,222 @@ const Settings = () => {
 
   // Main Settings View
   return (
-    <div className="app-container">
-      <div className="page-wrapper">
-        {/* Header */}
-        <div className="flex items-center gap-2 mb-6 animate-fade-in">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="p-2 -ml-2 rounded-full hover:bg-secondary transition-colors"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <h1 className="text-xl font-bold">Settings</h1>
+    <>
+      {/* KYC In-App Browser Modal */}
+      {showKycModal && kycUrl && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background">
+            <h2 className="font-semibold">Verify Identity</h2>
+            <button
+              onClick={() => {
+                setShowKycModal(false);
+                setKycUrl(null);
+                refreshSettings();
+              }}
+              className="p-2 hover:bg-secondary rounded-full transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          </div>
+          {/* Iframe */}
+          <iframe
+            src={kycUrl}
+            className="flex-1 w-full border-0"
+            allow="camera; microphone"
+            title="KYC Verification"
+          />
         </div>
+      )}
 
-        {/* Profile */}
-        <div className="pb-6 border-b border-border mb-6 animate-slide-up">
-          <p className="label-caps mb-2">Username</p>
-          <p className="display-medium">@{apiUsername ?? username ?? ''}</p>
-        </div>
+      <div className="app-container">
+        <div className="page-wrapper">
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-6 animate-fade-in">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="p-2 -ml-2 rounded-full hover:bg-secondary transition-colors"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <h1 className="text-xl font-bold">Settings</h1>
+          </div>
 
-        {/* Wallets */}
-        <div className="mb-6 animate-slide-up stagger-1">
-          <p className="section-title">Sui Wallets</p>
-          <div className="rounded-xl border border-border overflow-hidden">
-            {displayWallets.length === 0 ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                No wallets found
-              </div>
-            ) : (
-              displayWallets.map((wallet) => {
-                const isActiveWallet = currentAccount?.address?.toLowerCase() === wallet.address.toLowerCase();
-                const isTemporary = wallet.walletId === 'current-session';
+          {/* Profile */}
+          <div className="pb-6 border-b border-border mb-6 animate-slide-up">
+            <p className="label-caps mb-2">Username</p>
+            <p className="display-medium">@{apiUsername ?? username ?? ''}</p>
+          </div>
 
-                return (
-                  <div key={wallet.walletId} className="row-item px-4">
+          {/* Wallets */}
+          <div className="mb-6 animate-slide-up stagger-1">
+            <p className="section-title">Sui Wallets</p>
+            <div className="rounded-xl border border-border overflow-hidden">
+              {displayWallets.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No wallets found
+                </div>
+              ) : (
+                displayWallets.map((wallet) => {
+                  const isActiveWallet = currentAccount?.address?.toLowerCase() === wallet.address.toLowerCase();
+                  const isTemporary = wallet.walletId === 'current-session';
+
+                  return (
+                    <div key={wallet.walletId} className="row-item px-4">
+                      <div className="flex items-center gap-3">
+                        <Wallet className="w-5 h-5" />
+                        <div>
+                          <p className="font-medium">{wallet.label || 'Wallet'}</p>
+                          <p className="text-sm text-muted-foreground font-mono">
+                            {wallet.address.slice(0, 8)}...{wallet.address.slice(-4)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(wallet.address);
+                            setCopiedWalletId(wallet.walletId);
+                            setTimeout(() => setCopiedWalletId(null), 2000);
+                          }}
+                          className="p-2 hover:bg-secondary rounded-full transition-colors"
+                          title="Copy Address"
+                        >
+                          {copiedWalletId === wallet.walletId ? (
+                            <Check className="w-4 h-4 text-success" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-muted-foreground" />
+                          )}
+                        </button>
+                        <div className="h-4 w-px bg-border mx-1" />
+
+                        {isDefault(wallet.walletId, 'wallet') || displayWallets.length === 1 ? (
+                          <span className="tag-success">Default</span>
+                        ) : (
+                          <button
+                            onClick={() => handleSetDefault(wallet.walletId, 'wallet', wallet.address)}
+                            className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
+                          >
+                            Set Default
+                          </button>
+                        )}
+                        {!isActiveWallet && displayWallets.length > 1 && !isTemporary && (
+                          <button
+                            onClick={() => handleRemoveWallet(wallet.walletId)}
+                            className="p-2 hover:bg-destructive/10 transition-colors"
+                            title="Remove"
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <button
+                onClick={() => setView('add-wallet')}
+                className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+              >
+                <Wallet className="w-4 h-4" />
+                Add Wallet
+              </button>
+            </div>
+          </div>
+
+          {/* Banks */}
+          <div className="mb-6 animate-slide-up stagger-2">
+            <p className="section-title">Bank Accounts</p>
+            <div className="rounded-xl border border-border overflow-hidden">
+              {linkedBanks.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  No banks linked
+                </div>
+              ) : (
+                (linkedBanks || []).map((bank) => (
+                  <div key={`${bank.bankId}-${bank.bankBin}-${bank.accountNumber}`} className="row-item px-4">
                     <div className="flex items-center gap-3">
-                      <Wallet className="w-5 h-5" />
+                      <Building2 className="w-5 h-5" />
                       <div>
-                        <p className="font-medium">{wallet.label || 'Wallet'}</p>
-                        <p className="text-sm text-muted-foreground font-mono">
-                          {wallet.address.slice(0, 8)}...{wallet.address.slice(-4)}
+                        <p className="font-medium">{bank.label || bank.bankName}</p>
+                        <p className="text-sm text-muted-foreground">
+                          ****{bank.accountNumber.slice(-4)} · {bank.accountName}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(wallet.address);
-                          setCopiedWalletId(wallet.walletId);
-                          setTimeout(() => setCopiedWalletId(null), 2000);
-                        }}
-                        className="p-2 hover:bg-secondary rounded-full transition-colors"
-                        title="Copy Address"
-                      >
-                        {copiedWalletId === wallet.walletId ? (
-                          <Check className="w-4 h-4 text-success" />
-                        ) : (
-                          <Copy className="w-4 h-4 text-muted-foreground" />
-                        )}
-                      </button>
-                      <div className="h-4 w-px bg-border mx-1" />
-
-                      {isDefault(wallet.walletId, 'wallet') || displayWallets.length === 1 ? (
+                      {isDefault(bank.bankId, 'bank') ? (
                         <span className="tag-success">Default</span>
                       ) : (
                         <button
-                          onClick={() => handleSetDefault(wallet.walletId, 'wallet', wallet.address)}
+                          onClick={() => handleSetDefault(bank.bankId, 'bank')}
                           className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
                         >
                           Set Default
                         </button>
                       )}
-                      {!isActiveWallet && displayWallets.length > 1 && !isTemporary && (
-                        <button
-                          onClick={() => handleRemoveWallet(wallet.walletId)}
-                          className="p-2 hover:bg-destructive/10 transition-colors"
-                          title="Remove"
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            <button
-              onClick={() => setView('add-wallet')}
-              className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
-            >
-              <Wallet className="w-4 h-4" />
-              Add Wallet
-            </button>
-          </div>
-        </div>
-
-        {/* Banks */}
-        <div className="mb-6 animate-slide-up stagger-2">
-          <p className="section-title">Bank Accounts</p>
-          <div className="rounded-xl border border-border overflow-hidden">
-            {linkedBanks.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">
-                No banks linked
-              </div>
-            ) : (
-              (linkedBanks || []).map((bank) => (
-                <div key={`${bank.bankId}-${bank.bankBin}-${bank.accountNumber}`} className="row-item px-4">
-                  <div className="flex items-center gap-3">
-                    <Building2 className="w-5 h-5" />
-                    <div>
-                      <p className="font-medium">{bank.label || bank.bankName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        ****{bank.accountNumber.slice(-4)} · {bank.accountName}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isDefault(bank.bankId, 'bank') ? (
-                      <span className="tag-success">Default</span>
-                    ) : (
                       <button
-                        onClick={() => handleSetDefault(bank.bankId, 'bank')}
-                        className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
+                        onClick={() => handleRemoveBank(bank.bankId)}
+                        className="p-2 hover:bg-destructive/10 transition-colors"
+                        title="Remove"
                       >
-                        Set Default
+                        <Trash2 className="w-4 h-4 text-destructive" />
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleRemoveBank(bank.bankId)}
-                      className="p-2 hover:bg-destructive/10 transition-colors"
-                      title="Remove"
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </button>
+                    </div>
+                  </div>
+                ))
+              )}
+              <button
+                onClick={() => setView('add-bank')}
+                className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors border-t border-border flex items-center justify-center gap-2"
+              >
+                <Building2 className="w-4 h-4" />
+                Add Bank Account
+              </button>
+            </div>
+          </div>
+
+          {/* KYC */}
+          <div className="mb-6 animate-slide-up stagger-3">
+            <p className="section-title">Identity</p>
+            <div className="rounded-xl border border-border p-4">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <Shield className="w-5 h-5" />
+                  <div>
+                    <p className="font-medium">KYC Verification</p>
+                    <p className="text-sm text-muted-foreground">Verify for higher limits</p>
                   </div>
                 </div>
-              ))
-            )}
-            <button
-              onClick={() => setView('add-bank')}
-              className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors border-t border-border flex items-center justify-center gap-2"
-            >
-              <Building2 className="w-4 h-4" />
-              Add Bank Account
-            </button>
-          </div>
-        </div>
-
-        {/* KYC */}
-        <div className="mb-6 animate-slide-up stagger-3">
-          <p className="section-title">Identity</p>
-          <div className="rounded-xl border border-border p-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <Shield className="w-5 h-5" />
-                <div>
-                  <p className="font-medium">KYC Verification</p>
-                  <p className="text-sm text-muted-foreground">Verify for higher limits</p>
-                </div>
+                <span className="tag">Unverified</span>
               </div>
-              <span className="tag">Unverified</span>
+              <button
+                onClick={handleStartKyc}
+                disabled={isLoadingSettings || !walletAddressForKyc}
+                className="w-full py-3 mt-4 border border-border hover:bg-accent transition-colors"
+              >
+                Start KYC
+              </button>
             </div>
-            <button
-              onClick={handleStartKyc}
-              disabled={isLoadingSettings || !walletAddressForKyc}
-              className="w-full py-3 mt-4 border border-border hover:bg-accent transition-colors"
-            >
-              Start KYC
-            </button>
           </div>
+
+
+
+          {/* Disconnect */}
+          <button
+            onClick={handleDisconnect}
+            className="w-full py-4 rounded-xl text-destructive text-center font-medium border border-destructive hover:bg-destructive hover:text-white transition-colors flex items-center justify-center gap-2"
+          >
+            <LogOut className="w-5 h-5" />
+            Disconnect
+          </button>
+
+          <p className="text-center text-sm text-muted-foreground mt-6">
+            HiddenWallet v1.0 · Sui Mainnet
+          </p>
         </div>
-
-
-
-        {/* Disconnect */}
-        <button
-          onClick={handleDisconnect}
-          className="w-full py-4 rounded-xl text-destructive text-center font-medium border border-destructive hover:bg-destructive hover:text-white transition-colors flex items-center justify-center gap-2"
-        >
-          <LogOut className="w-5 h-5" />
-          Disconnect
-        </button>
-
-        <p className="text-center text-sm text-muted-foreground mt-6">
-          HiddenWallet v1.0 · Sui Testnet
-        </p>
       </div>
-    </div>
+    </>
   );
 };
 
