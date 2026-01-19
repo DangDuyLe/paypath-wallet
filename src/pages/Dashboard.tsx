@@ -3,6 +3,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 import { useMemo, useState } from 'react';
 import { ArrowUpRight, ArrowDownLeft, Eye, EyeOff, Copy, Check, Users, TrendingUp, Award, Trophy } from 'lucide-react';
+import { toast } from 'sonner';
 
 const Dashboard = () => {
     const navigate = useNavigate();
@@ -37,6 +38,19 @@ const Dashboard = () => {
 
     const [showBalance, setShowBalance] = useState(true);
     const [copiedDigest, setCopiedDigest] = useState<string | null>(null);
+    const [copiedUsername, setCopiedUsername] = useState(false);
+
+    const copyUsername = async () => {
+        if (!username) return;
+        try {
+            await navigator.clipboard.writeText(`@${username}`);
+            setCopiedUsername(true);
+            toast.success('Copied!');
+            setTimeout(() => setCopiedUsername(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy username:', err);
+        }
+    };
 
     if (isAuthLoading) {
         return (
@@ -131,15 +145,28 @@ const Dashboard = () => {
             <div className="page-wrapper">
                 {/* Header - User Pill & Reward Badge */}
                 <div className="flex items-center justify-between animate-fade-in pt-2">
-                    <button
-                        onClick={() => navigate('/settings')}
-                        className="user-pill"
-                    >
-                        <div className="user-avatar">
-                            <span className="text-xs font-semibold">{username[0].toUpperCase()}</span>
-                        </div>
-                        <span className="font-medium text-sm">{username}</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => navigate('/settings')}
+                            className="user-pill"
+                        >
+                            <div className="user-avatar">
+                                <span className="text-xs font-semibold">{username[0].toUpperCase()}</span>
+                            </div>
+                        </button>
+                        <button
+                            onClick={copyUsername}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 rounded-full transition-colors"
+                            title="Click to copy username"
+                        >
+                            <span className="font-medium text-sm">@{username}</span>
+                            {copiedUsername ? (
+                                <Check className="w-3.5 h-3.5 text-success" />
+                            ) : (
+                                <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                            )}
+                        </button>
+                    </div>
 
                     {/* Reward Points Badge - Subtle */}
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary rounded-full transition-colors hover:bg-secondary/80 cursor-default">
@@ -244,7 +271,7 @@ const Dashboard = () => {
 
                 <div className="mt-6 animate-slide-up stagger-3 hidden md:block">
                     <div className="flex justify-between items-center mb-3">
-                        <h3 className="section-title mb-0">Recent Activity</h3>
+                        <h3 className="section-title mb-0">Transactions History</h3>
                         <button
                             onClick={() => navigate('/history')}
                             className="text-sm text-muted-foreground hover:text-foreground transition-colors"

@@ -4,12 +4,13 @@ import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 import { checkUsername, postOnboarding, postRegister } from '@/services/api';
+import { toast } from 'sonner';
 import { Mail, Users } from 'lucide-react';
 
 const Onboarding = () => {
   const navigate = useNavigate();
   const currentAccount = useCurrentAccount();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, refreshProfile } = useAuth();
   const { setUsername, username: existingUsername } = useWallet();
   const [inputUsername, setInputUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -88,6 +89,22 @@ const Onboarding = () => {
       }
 
       setUsername(clean);
+
+      // Refresh profile to sync user data with AuthContext
+      // Use timeout fallback in case refreshProfile hangs
+      const redirectTimeout = setTimeout(() => {
+        toast.info('Taking longer than expected...');
+        navigate('/dashboard');
+      }, 5000);
+
+      try {
+        await refreshProfile();
+      } catch {
+        // Profile refresh failed, but user is created - proceed anyway
+        console.warn('Profile refresh failed, proceeding to dashboard');
+      }
+
+      clearTimeout(redirectTimeout);
       navigate('/dashboard');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Onboarding failed';
