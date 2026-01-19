@@ -842,11 +842,13 @@ const Send = () => {
                   </div>
                 </div>
 
-                {/* Beneficiary Name */}
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-muted-foreground">Recipient</span>
-                  <span className="font-medium text-sm">{externalBank.beneficiaryName}</span>
-                </div>
+                {/* Beneficiary Name - Hide if HiddenWallet user (already shown above) */}
+                {!externalBank.isLinkedToHiddenWallet && (
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">Recipient</span>
+                    <span className="font-medium text-sm">{externalBank.beneficiaryName}</span>
+                  </div>
+                )}
               </div>
             )}
 
