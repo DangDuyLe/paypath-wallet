@@ -75,6 +75,11 @@ const Send = () => {
   const [recipientOffchainQr, setRecipientOffchainQr] = useState<string | null>(null);
   // For showing VND equivalent on success screen
   const [fiatPayoutAmount, setFiatPayoutAmount] = useState<{ amount: number; currency: string } | null>(null);
+  const [offrampQuote, setOfframpQuote] = useState<{
+    exchangeInfo: { feeAmount: number };
+    platformFee?: { feePercent: string; feeRate: number; feeAmount: number; baseFiatAmount: number; finalFiatAmount: number; cryptoEquivalent?: number | null };
+    paymentInstruction: { totalCrypto: string };
+  } | null>(null);
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) {
@@ -133,7 +138,8 @@ const Send = () => {
   ];
 
   const selectedSource = allSources.find(s => s.id === selectedSourceId && s.type === selectedSourceType) || allSources[0];
-  const fee = 0.001;
+  const networkFeeSui = 0.005;
+  const minGasBalanceSui = 0.001;
 
   const handleSelectSource = (source: typeof allSources[0]) => {
     setSelectedSourceId(source.id);
@@ -373,7 +379,7 @@ const Send = () => {
     if ((scanResult === 'external' && externalBank) || qrStringToUse) {
       if (isNaN(amountNum) || amountNum <= 0) { setError('Invalid amount'); return; }
       if (amountNum > usdcBalance) { setError('Insufficient balance'); return; }
-      if (suiBalance < fee) { setError('Not enough SUI for gas fees'); return; }
+      if (suiBalance < minGasBalanceSui) { setError('Not enough SUI for gas fees'); return; }
 
       // Get quote from BE to show VND equivalent
       try {
@@ -389,8 +395,9 @@ const Send = () => {
           payerWalletAddress: payerAddress,
         });
 
-        const { paymentInstruction, payout } = orderRes.data;
+        const { paymentInstruction, payout, exchangeInfo, platformFee } = orderRes.data;
         setFiatPayoutAmount({ amount: paymentInstruction.totalPayout, currency: payout.fiatCurrency });
+        setOfframpQuote({ exchangeInfo: { feeAmount: Number(exchangeInfo.feeAmount) }, platformFee, paymentInstruction: { totalCrypto: paymentInstruction.totalCrypto } });
       } catch (err) {
         console.error('Failed to get quote:', err);
         setError('Failed to get exchange rate');
@@ -405,7 +412,7 @@ const Send = () => {
     if (!recipientValid || !recipientAddress) { setError('Verify recipient first'); return; }
     if (isNaN(amountNum) || amountNum <= 0) { setError('Invalid amount'); return; }
     if (amountNum > usdcBalance) { setError('Insufficient USDC balance'); return; }
-    if (suiBalance < fee) { setError('Not enough SUI for gas fees'); return; }
+    if (suiBalance < minGasBalanceSui) { setError('Not enough SUI for gas fees'); return; }
     setStep('review');
   };
 
@@ -433,11 +440,12 @@ const Send = () => {
           payerWalletAddress: payerAddress,
         });
 
-        const { id: orderId, paymentInstruction, payout } = orderRes.data;
+        const { id: orderId, paymentInstruction, payout, exchangeInfo, platformFee } = orderRes.data;
         const { toAddress, totalCrypto, totalPayout } = paymentInstruction;
 
         // Store fiat payout info for success screen
         setFiatPayoutAmount({ amount: totalPayout, currency: payout.fiatCurrency });
+        setOfframpQuote({ exchangeInfo: { feeAmount: Number(exchangeInfo.feeAmount) }, platformFee, paymentInstruction: { totalCrypto: paymentInstruction.totalCrypto } });
 
         // 2. Send USDC to partner wallet (on-chain)
         const result = await sendUsdc(toAddress, parseFloat(totalCrypto));
@@ -610,22 +618,22 @@ const Send = () => {
               </div>
               {isExternal && (
                 <div className="flex justify-between items-center py-3">
-                  <span className="text-muted-foreground text-sm">Fee (0.2%)</span>
-                  <span className="text-sm">${(parseFloat(amount) * 0.002).toFixed(4)}</span>
+                  <span className="text-muted-foreground text-sm">Fee</span>
+                  <span className="text-sm">
+                    {offrampQuote?.platformFee?.cryptoEquivalent != null
+                      ? `${Number(offrampQuote.platformFee.cryptoEquivalent).toFixed(4)} USDC`
+                      : '-'
+                    }
+                  </span>
                 </div>
               )}
               <div className="flex justify-between items-center py-3">
                 <span className="text-muted-foreground text-sm">Network Fee</span>
-                <span className="text-sm">~0.005 SUI</span>
+                <span className="text-sm">~{networkFeeSui.toFixed(3)} SUI</span>
               </div>
               <div className="flex justify-between items-center py-3 bg-secondary -mx-4 px-4 rounded-xl">
                 <span className="font-semibold text-sm">Total</span>
-                <span className="font-bold">
-                  ${isExternal
-                    ? (parseFloat(amount) + parseFloat(amount) * 0.002).toFixed(3)
-                    : parseFloat(amount).toFixed(3)
-                  }
-                </span>
+                <span className="font-bold">${parseFloat(amount).toFixed(3)}</span>
               </div>
             </div>
           </div>
