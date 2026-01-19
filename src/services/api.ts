@@ -190,6 +190,7 @@ export type CreatePaymentOrderDto = {
   payerWalletAddress: string;
   fiatCurrency?: string;
   country?: string;
+  recipientCountry?: string;
   clientRequestId?: string;
 };
 
