@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
-import { Wallet, Building2, Scan, Check, Trash2, Shield, LogOut, Loader2, AlertTriangle, ChevronLeft, Copy } from 'lucide-react';
+import { Wallet, Building2, Scan, Check, Trash2, Shield, LogOut, Loader2, AlertTriangle, ChevronLeft, Copy, Zap } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
-import { useDisconnectWallet } from '@mysten/dapp-kit';
+import { toast } from 'sonner';
+import { useDisconnectWallet, useCurrentAccount, useCurrentWallet } from '@mysten/dapp-kit';
 import {
   addOffchainBankByQr,
   addOnchainWallet,
@@ -50,6 +51,8 @@ const Settings = () => {
     return typeof u?.username === 'string' ? u.username : null;
   })();
   const { mutate: disconnectSuiWallet } = useDisconnectWallet();
+  const currentAccount = useCurrentAccount();
+  const { currentWallet } = useCurrentWallet();
   const { username, disconnect } = useWallet();
 
   const [linkedBanks, setLinkedBanks] = useState<ApiBank[]>([]);
@@ -57,7 +60,7 @@ const Settings = () => {
   const [defaultAccountId, setDefaultAccountId] = useState<string | null>(null);
   const [defaultAccountType, setDefaultAccountType] = useState<'wallet' | 'bank'>('wallet');
   const [kycStatus, setKycStatus] = useState<'unverified' | 'pending' | 'verified'>('unverified');
-  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [settingsError, setSettingsError] = useState<string>('');
 
   const walletAddressForKyc = (() => {
@@ -77,6 +80,39 @@ const Settings = () => {
   const [scannedBankQr, setScannedBankQr] = useState<string | null>(null);
   const [scannedBank, setScannedBank] = useState<ScannedBankData | null>(null);
   const [copiedWalletId, setCopiedWalletId] = useState<string | null>(null);
+  const autoSaveAttempted = useRef<string | null>(null);
+
+  // Create unified display list: include currentAccount if not already in linkedWallets
+  const displayWallets = (() => {
+    const wallets = [...linkedWallets];
+    const currentAddress = currentAccount?.address;
+
+    if (currentAddress) {
+      const isCurrentInList = linkedWallets.some(w => w.address.toLowerCase() === currentAddress.toLowerCase());
+      if (!isCurrentInList) {
+        wallets.unshift({
+          walletId: 'current-session',
+          address: currentAddress,
+          label: 'Main Wallet',
+        });
+      }
+    }
+    return wallets;
+  })();
+
+  // Auto-save session wallet if it's the only one
+  useEffect(() => {
+    const autoSave = async () => {
+      // If we have exactly 1 wallet and it's a temporary session one
+      if (displayWallets.length === 1 && displayWallets[0].walletId === 'current-session' && displayWallets[0].address) {
+        // We only trigger this if we aren't already loading/processing
+        if (!isLoadingSettings) {
+          await handleSetDefault('current-session', 'wallet', displayWallets[0].address);
+        }
+      }
+    };
+    autoSave();
+  }, [displayWallets, isLoadingSettings]);
 
   const refreshSettings = async () => {
     setSettingsError('');
@@ -248,7 +284,15 @@ const Settings = () => {
 
   const isDefault = (id: string, type: 'wallet' | 'bank') =>
     defaultAccountId === id && defaultAccountType === type;
+
   const handleRemoveWallet = async (id: string) => {
+    if (isDefault(id, 'wallet')) {
+      toast.error('Cannot remove default wallet', {
+        description: 'Please set another wallet as default first.'
+      });
+      return;
+    }
+
     setSettingsError('');
     setIsLoadingSettings(true);
     try {
@@ -262,17 +306,61 @@ const Settings = () => {
     }
   };
 
-  const handleSetDefault = async (id: string, type: 'wallet' | 'bank') => {
+  const handleSetDefault = async (id: string, type: 'wallet' | 'bank', address?: string) => {
     setSettingsError('');
     setIsLoadingSettings(true);
     try {
+      let walletId = id;
+
+      // If it's a session wallet (not in DB), add it first
+      if (id === 'current-session' && address) {
+        const result = await addOnchainWallet({
+          address,
+          chain: 'sui',
+          label: currentWallet?.name ? `${currentWallet.name}` : 'Main Wallet',
+          walletProvider: currentWallet?.name,
+        });
+        // Get the new wallet ID from the response
+        // Get the new wallet ID from the response (backend returns walletId)
+        const newWalletId = (result.data as { walletId?: string; id?: string })?.walletId || (result.data as { id?: string })?.id;
+        if (newWalletId) {
+          walletId = newWalletId;
+        }
+        await refreshSettings();
+      }
+
       await setDefaultPaymentMethod({
-        walletId: id,
+        walletId,
         walletType: type === 'wallet' ? 'onchain' : 'offchain',
       });
       await refreshSettings();
-    } catch (e) {
-      console.error('Failed to set default', e);
+      await refreshSettings();
+    } catch (e: any) {
+      // Handle 409 Conflict (Wallet already exists)
+      if (e.response?.status === 409 && address) {
+        try {
+          // Fetch fresh list to find the existing wallet ID
+          const response = await listOnchainWallets();
+          const wallets = (response.data as any)?.wallets || [];
+          const existing = wallets.find((w: any) => w.address.toLowerCase() === address.toLowerCase());
+
+          if (existing) {
+            // Retry set default with existing ID
+            await setDefaultPaymentMethod({
+              walletId: existing.walletId,
+              walletType: 'onchain',
+            });
+            await refreshSettings();
+            return; // Success
+          } else {
+            // Wallet exists but not in our list -> belongs to another user
+            toast.error('Wallet already connected to another account');
+          }
+        } catch (retryErr) {
+          // Silent failure on retry
+        }
+      }
+
       setSettingsError('Failed to set default account');
     } finally {
       setIsLoadingSettings(false);
@@ -592,57 +680,68 @@ const Settings = () => {
         <div className="mb-6 animate-slide-up stagger-1">
           <p className="section-title">Sui Wallets</p>
           <div className="rounded-xl border border-border overflow-hidden">
-            {(linkedWallets || []).map((wallet) => (
-              <div key={wallet.walletId} className="row-item px-4">
-                <div className="flex items-center gap-3">
-                  <Wallet className="w-5 h-5" />
-                  <div>
-                    <p className="font-medium">{wallet.label || 'Wallet'}</p>
-                    <p className="text-sm text-muted-foreground font-mono">
-                      {wallet.address.slice(0, 8)}...{wallet.address.slice(-4)}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(wallet.address);
-                      setCopiedWalletId(wallet.walletId);
-                      setTimeout(() => setCopiedWalletId(null), 2000);
-                    }}
-                    className="p-2 hover:bg-secondary rounded-full transition-colors"
-                    title="Copy Address"
-                  >
-                    {copiedWalletId === wallet.walletId ? (
-                      <Check className="w-4 h-4 text-success" />
-                    ) : (
-                      <Copy className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </button>
-                  <div className="h-4 w-px bg-border mx-1" />
-
-                  {isDefault(wallet.walletId, 'wallet') ? (
-                    <span className="tag-success">Default</span>
-                  ) : (
-                    <button
-                      onClick={() => handleSetDefault(wallet.walletId, 'wallet')}
-                      className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
-                    >
-                      Set Default
-                    </button>
-                  )}
-                  {linkedWallets.length > 1 && (
-                    <button
-                      onClick={() => handleRemoveWallet(wallet.walletId)}
-                      className="p-2 hover:bg-destructive/10 transition-colors"
-                      title="Remove"
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </button>
-                  )}
-                </div>
+            {displayWallets.length === 0 ? (
+              <div className="p-4 text-center text-sm text-muted-foreground">
+                No wallets found
               </div>
-            ))}
+            ) : (
+              displayWallets.map((wallet) => {
+                const isActiveWallet = currentAccount?.address?.toLowerCase() === wallet.address.toLowerCase();
+                const isTemporary = wallet.walletId === 'current-session';
+
+                return (
+                  <div key={wallet.walletId} className="row-item px-4">
+                    <div className="flex items-center gap-3">
+                      <Wallet className="w-5 h-5" />
+                      <div>
+                        <p className="font-medium">{wallet.label || 'Wallet'}</p>
+                        <p className="text-sm text-muted-foreground font-mono">
+                          {wallet.address.slice(0, 8)}...{wallet.address.slice(-4)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(wallet.address);
+                          setCopiedWalletId(wallet.walletId);
+                          setTimeout(() => setCopiedWalletId(null), 2000);
+                        }}
+                        className="p-2 hover:bg-secondary rounded-full transition-colors"
+                        title="Copy Address"
+                      >
+                        {copiedWalletId === wallet.walletId ? (
+                          <Check className="w-4 h-4 text-success" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-muted-foreground" />
+                        )}
+                      </button>
+                      <div className="h-4 w-px bg-border mx-1" />
+
+                      {isDefault(wallet.walletId, 'wallet') || displayWallets.length === 1 ? (
+                        <span className="tag-success">Default</span>
+                      ) : (
+                        <button
+                          onClick={() => handleSetDefault(wallet.walletId, 'wallet', wallet.address)}
+                          className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
+                        >
+                          Set Default
+                        </button>
+                      )}
+                      {!isActiveWallet && displayWallets.length > 1 && !isTemporary && (
+                        <button
+                          onClick={() => handleRemoveWallet(wallet.walletId)}
+                          className="p-2 hover:bg-destructive/10 transition-colors"
+                          title="Remove"
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
             <button
               onClick={() => setView('add-wallet')}
               className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
