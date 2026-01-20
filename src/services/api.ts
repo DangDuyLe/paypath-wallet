@@ -234,6 +234,28 @@ export type CreatePaymentOrderResponseDto = {
 export const createPaymentOrder = (dto: CreatePaymentOrderDto) =>
   api.post<CreatePaymentOrderResponseDto>('/payments/orders', dto);
 
+export type PaymentsQuoteDto = {
+  direction: 'USDC_TO_FIAT';
+  usdcAmount: string;
+  country: string;
+  token: string;
+};
+
+export type PaymentsQuoteResponseDto = {
+  success: boolean;
+  direction: string;
+  fiatCurrency: string;
+  fiatAmount: number;
+  cryptoCurrency: string;
+  usdcAmount: string;
+  exchangeRate: string | number;
+  feeAmount: number;
+  feeRate: number;
+  timestamp: string;
+};
+
+export const paymentsQuote = (dto: PaymentsQuoteDto) =>
+  api.post<PaymentsQuoteResponseDto>('/payments/quote', dto);
 export const confirmPaymentOrder = (orderId: string, userPaymentTxDigest: string) =>
   api.post(`/payments/orders/${orderId}/confirm-user-payment`, { userPaymentTxDigest });
 

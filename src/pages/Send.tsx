@@ -1,10 +1,10 @@
 import { useAuth } from '@/context/AuthContext';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2, X, User, AlertCircle, CreditCard, Copy } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
-import { createPaymentOrder, confirmPaymentOrder, getPaymentOrder, syncPaymentOrder, lookupUser, scanQr, getDefaultPaymentMethod } from '@/services/api';
+import { createPaymentOrder, confirmPaymentOrder, getPaymentOrder, syncPaymentOrder, lookupUser, scanQr, getDefaultPaymentMethod, paymentsQuote } from '@/services/api';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import {
   AlertDialog,
@@ -58,12 +58,47 @@ const Send = () => {
   const [amountSource, setAmountSource] = useState<'vnd' | 'usd' | null>(null); // Which input was edited
   const [error, setError] = useState('');
 
-  // Exchange rate: 1 USD = 25,500 VND
-  const EXCHANGE_RATE = 25500;
+  const [exchangeRate, setExchangeRate] = useState<number>(25500);
+  const [isFetchingRate, setIsFetchingRate] = useState(false);
+  const [rateError, setRateError] = useState<string | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [isAutoScan, setIsAutoScan] = useState(false);
 
+  const [scanResult, setScanResult] = useState<ScanResult>('none');
+  const [isParsing, setIsParsing] = useState(false);
+  const [externalBank, setExternalBank] = useState<ExternalBankInfo | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [scannedQrString, setScannedQrString] = useState<string | null>(null);
+  const [recipientCountry, setRecipientCountry] = useState<string | null>(null);
+  // For username recipients with offchain default wallet
+  const [recipientOffchainQr, setRecipientOffchainQr] = useState<string | null>(null);
+
   // Auto-open scanner if navigated from mobile nav
+  const fetchRate = useCallback(async (country?: string | null) => {
+    setIsFetchingRate(true);
+    setRateError(null);
+
+    try {
+      const res = await paymentsQuote({
+        direction: 'USDC_TO_FIAT',
+        usdcAmount: '1',
+        country: (country ?? 'VN').toUpperCase(),
+        token: 'USDC',
+      });
+
+      const fiatAmount = Number(res.data?.fiatAmount);
+      if (Number.isFinite(fiatAmount) && fiatAmount > 0) {
+        setExchangeRate(fiatAmount);
+      } else {
+        setRateError('Invalid quote');
+      }
+    } catch {
+      setRateError('Failed to fetch quote');
+    } finally {
+      setIsFetchingRate(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (location.state?.autoScan) {
       setShowScanner(true);
@@ -72,6 +107,36 @@ const Send = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  // intentionally placed after scan/offramp-related state declarations
+  // to avoid temporal-dead-zone issues
+  useEffect(() => {
+    if (scanResult !== 'external') return;
+
+    // Fetch immediately, then poll every 10s
+    fetchRate(recipientCountry);
+
+    const intervalId = window.setInterval(() => {
+      fetchRate(recipientCountry);
+    }, 10_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [fetchRate, recipientCountry, scanResult]);
+useEffect(() => {
+    // Poll $1 recipient-gets quote every 10s on Send screen
+    // Default to VN until scan provides a specific country
+    const intervalId = window.setInterval(() => {
+      fetchRate(recipientCountry);
+    }, 10_000);
+
+    fetchRate(recipientCountry);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [fetchRate, recipientCountry]);
 
   // Fetch default wallet/bank info for self-transfer check
   const [defaultWalletAddress, setDefaultWalletAddress] = useState<string | null>(null);
@@ -108,14 +173,6 @@ const Send = () => {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(defaultAccountId);
   const [selectedSourceType, setSelectedSourceType] = useState<'wallet' | 'bank'>(defaultAccountType);
 
-  const [scanResult, setScanResult] = useState<ScanResult>('none');
-  const [isParsing, setIsParsing] = useState(false);
-  const [externalBank, setExternalBank] = useState<ExternalBankInfo | null>(null);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [scannedQrString, setScannedQrString] = useState<string | null>(null);
-  const [recipientCountry, setRecipientCountry] = useState<string | null>(null);
-  // For username recipients with offchain default wallet
-  const [recipientOffchainQr, setRecipientOffchainQr] = useState<string | null>(null);
   // For showing VND equivalent on success screen
   const [fiatPayoutAmount, setFiatPayoutAmount] = useState<{ amount: number; currency: string } | null>(null);
   const [offrampQuote, setOfframpQuote] = useState<{
@@ -485,7 +542,7 @@ const Send = () => {
       if (amountNum > usdcBalance) { setError('Insufficient balance'); return; }
       if (suiBalance < minGasBalanceSui) { setError('Not enough SUI for gas fees'); return; }
 
-      // Get quote from BE to show VND equivalent
+      // Get quote from BE to show VND equivalent + use live exchange rate
       try {
         const payerAddress = (user as { walletAddress?: string })?.walletAddress || linkedWallets[0]?.address;
         if (!payerAddress || !qrStringToUse) {
@@ -501,8 +558,16 @@ const Send = () => {
         });
 
         const { paymentInstruction, payout, exchangeInfo, platformFee } = orderRes.data;
+        const rate = Number(exchangeInfo?.exchangeRate);
+        if (Number.isFinite(rate) && rate > 0) {
+          setExchangeRate(rate);
+        }
         setFiatPayoutAmount({ amount: paymentInstruction.totalPayout, currency: payout.fiatCurrency });
-        setOfframpQuote({ exchangeInfo: { feeAmount: Number(exchangeInfo.feeAmount) }, platformFee, paymentInstruction: { totalCrypto: paymentInstruction.totalCrypto } });
+        setOfframpQuote({
+          exchangeInfo: { feeAmount: Number(exchangeInfo.feeAmount) },
+          platformFee,
+          paymentInstruction: { totalCrypto: paymentInstruction.totalCrypto },
+        });
       } catch (err: unknown) {
         console.error('Failed to get quote:', err);
         const message = (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
@@ -976,7 +1041,7 @@ const Send = () => {
                       const vndNum = parseInt(raw, 10);
                       setAmountVnd(raw);
                       // Convert to USD
-                      const usdNum = vndNum / EXCHANGE_RATE;
+                      const usdNum = vndNum / exchangeRate;
                       setAmount(usdNum.toFixed(2));
                       setAmountSource('vnd');
                     }
@@ -990,7 +1055,7 @@ const Send = () => {
 
               {/* Swap indicator */}
               <div className="flex items-center justify-center text-muted-foreground text-sm">
-                <span>≈ 1 USDC = {EXCHANGE_RATE.toLocaleString()} ₫</span>
+                <span>$1 ≈ {exchangeRate.toLocaleString()} ₫</span>
               </div>
 
               {/* USD Input */}
@@ -1006,7 +1071,7 @@ const Send = () => {
                       setAmount(value);
                       // Convert to VND
                       const usdNum = parseFloat(value) || 0;
-                      const vndNum = Math.round(usdNum * EXCHANGE_RATE);
+                      const vndNum = Math.round(usdNum * exchangeRate);
                       setAmountVnd(vndNum > 0 ? vndNum.toString() : '');
                       setAmountSource('usd');
                     }
