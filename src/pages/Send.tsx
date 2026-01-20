@@ -4,7 +4,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2, X, User, AlertCircle, CreditCard, Copy } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
-import { createPaymentOrder, confirmPaymentOrder, getPaymentOrder, syncPaymentOrder, lookupUser, scanQr } from '@/services/api';
+import { createPaymentOrder, confirmPaymentOrder, getPaymentOrder, syncPaymentOrder, lookupUser, scanQr, getDefaultPaymentMethod } from '@/services/api';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +49,7 @@ const Send = () => {
     defaultAccountType,
     isValidWalletAddress,
   } = useWallet();
+  const currentAccount = useCurrentAccount();
 
   const [step, setStep] = useState<SendStep>('input');
   const [recipient, setRecipient] = useState('');
@@ -65,6 +67,31 @@ const Send = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  // Fetch default wallet/bank info for self-transfer check
+  const [defaultWalletAddress, setDefaultWalletAddress] = useState<string | null>(null);
+  const [defaultBankAccountNumber, setDefaultBankAccountNumber] = useState<string | null>(null);
+  useEffect(() => {
+    const fetchDefaultPayment = async () => {
+      try {
+        const res = await getDefaultPaymentMethod();
+        if (res.data?.walletType === 'onchain' && res.data?.address) {
+          setDefaultWalletAddress(res.data.address.toLowerCase());
+          setDefaultBankAccountNumber(null);
+        } else if (res.data?.walletType === 'offchain' && res.data?.accountNumber) {
+          setDefaultBankAccountNumber(res.data.accountNumber);
+          setDefaultWalletAddress(null);
+        } else {
+          setDefaultWalletAddress(null);
+          setDefaultBankAccountNumber(null);
+        }
+      } catch {
+        setDefaultWalletAddress(null);
+        setDefaultBankAccountNumber(null);
+      }
+    };
+    fetchDefaultPayment();
+  }, []);
 
   const [isChecking, setIsChecking] = useState(false);
   const [recipientValid, setRecipientValid] = useState<boolean | null>(null);
@@ -190,6 +217,18 @@ const Send = () => {
       // Direct wallet address
       if (input.startsWith('0x')) {
         if (isValidWalletAddress(input)) {
+          // Block if trying to send to the DEFAULT wallet
+          const inputLower = input.toLowerCase();
+
+          if (defaultWalletAddress && inputLower === defaultWalletAddress) {
+            setRecipientValid(false);
+            setRecipientAddress(null);
+            setRecipientType('none');
+            setError('Cannot send to your default wallet');
+            setIsChecking(false);
+            return;
+          }
+
           setRecipientValid(true);
           setRecipientAddress(input);
           setRecipientType('address');
@@ -216,6 +255,17 @@ const Send = () => {
           setRecipientAddress(null);
           setRecipientType('none');
           setError('User has no linked wallet');
+          setIsChecking(false);
+          return;
+        }
+
+        // Prevent self-transfer
+        const currentUsername = (apiUsername || username || '').toLowerCase();
+        if (userData.username.toLowerCase() === currentUsername) {
+          setRecipientValid(false);
+          setRecipientAddress(null);
+          setRecipientType('none');
+          setError('Cannot send to yourself');
           setIsChecking(false);
           return;
         }
@@ -359,6 +409,14 @@ const Send = () => {
       if (data.type === 'offchain' && data.bankInfo) {
         setScannedQrString(qrString);
         const bank = data.bankInfo;
+
+        // Block if trying to send to default bank account
+        if (defaultBankAccountNumber && bank.accountNumber === defaultBankAccountNumber) {
+          setScanResult('error');
+          setError('Cannot send to your default bank account');
+          setIsParsing(false);
+          return;
+        }
 
         setExternalBank({
           bankName: bank.bankName,

@@ -83,6 +83,7 @@ interface WalletState {
   linkedWallets: LinkedWallet[];
   defaultAccountId: string | null;
   defaultAccountType: DefaultAccountType;
+  defaultWalletAddress: string | null; // Address of default wallet for self-transfer check
   contacts: string[];
   kycStatus: KYCStatus;
   isLoadingBalance: boolean;
@@ -132,6 +133,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     linkedWallets: [],
     defaultAccountId: null,
     defaultAccountType: 'wallet',
+    defaultWalletAddress: null,
     contacts: ['@alice', '@bob'],
     kycStatus: 'unverified',
     isLoadingBalance: false,
@@ -443,6 +445,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       linkedWallets: [],
       defaultAccountId: null,
       defaultAccountType: 'wallet',
+      defaultWalletAddress: null,
       contacts: ['@alice', '@bob'],
       kycStatus: 'unverified',
       isLoadingBalance: false,
