@@ -143,6 +143,10 @@ export type OffchainBankDto = {
 export type PaymentMethodDefaultResponseDto = {
   walletId: string | null;
   walletType: 'onchain' | 'offchain' | null;
+  address?: string; // For onchain wallets
+  accountNumber?: string; // For offchain banks
+  bankName?: string; // For offchain banks
+  accountName?: string; // For offchain banks
 };
 
 export const listOnchainWallets = async () => {
@@ -190,6 +194,7 @@ export type CreatePaymentOrderDto = {
   payerWalletAddress: string;
   fiatCurrency?: string;
   country?: string;
+  recipientCountry?: string;
   clientRequestId?: string;
 };
 

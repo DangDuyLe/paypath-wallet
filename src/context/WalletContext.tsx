@@ -83,6 +83,7 @@ interface WalletState {
   linkedWallets: LinkedWallet[];
   defaultAccountId: string | null;
   defaultAccountType: DefaultAccountType;
+  defaultWalletAddress: string | null; // Address of default wallet for self-transfer check
   contacts: string[];
   kycStatus: KYCStatus;
   isLoadingBalance: boolean;
@@ -132,6 +133,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     linkedWallets: [],
     defaultAccountId: null,
     defaultAccountType: 'wallet',
+    defaultWalletAddress: null,
     contacts: ['@alice', '@bob'],
     kycStatus: 'unverified',
     isLoadingBalance: false,
@@ -148,7 +150,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const sentTxs = await suiClient.queryTransactionBlocks({
         filter: { FromAddress: address },
         options: { showInput: true, showEffects: true, showBalanceChanges: true },
-        limit: 10,
+        limit: 15,
         order: 'descending',
       });
 
@@ -156,52 +158,88 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const receivedTxs = await suiClient.queryTransactionBlocks({
         filter: { ToAddress: address },
         options: { showInput: true, showEffects: true, showBalanceChanges: true },
-        limit: 10,
+        limit: 15,
         order: 'descending',
       });
 
+      // Merge and deduplicate transactions by digest
+      const allTxMap = new Map<string, typeof sentTxs.data[0]>();
+      for (const tx of [...sentTxs.data, ...receivedTxs.data]) {
+        if (!allTxMap.has(tx.digest)) {
+          allTxMap.set(tx.digest, tx);
+        }
+      }
+
       const transactions: TransactionRecord[] = [];
 
-      // Process sent transactions
-      for (const tx of sentTxs.data) {
+      // Process all transactions
+      for (const tx of allTxMap.values()) {
         const balanceChanges = tx.balanceChanges || [];
 
-        // Find USDC balance changes
+        // Find USDC balance changes for the current user's address
         for (const change of balanceChanges) {
-          if (change.coinType === USDC_COIN_TYPE && change.owner && typeof change.owner === 'object' && 'AddressOwner' in change.owner) {
-            const ownerAddr = change.owner.AddressOwner;
-            const amount = Math.abs(Number(change.amount)) / Math.pow(10, USDC_DECIMALS);
+          if (change.coinType !== USDC_COIN_TYPE) continue;
+          if (!change.owner || typeof change.owner !== 'object' || !('AddressOwner' in change.owner)) continue;
 
-            if (amount > 0 && ownerAddr !== address) {
+          const ownerAddr = change.owner.AddressOwner;
+          const rawAmount = Number(change.amount);
+          const absAmount = Math.abs(rawAmount) / Math.pow(10, USDC_DECIMALS);
+
+          // Skip dust amounts
+          if (absAmount < 0.000001) continue;
+
+          // Check if this balance change is for the user's address
+          if (ownerAddr === address) {
+            if (rawAmount < 0) {
+              // SENT transaction: user's balance decreased (negative amount)
+              // Find recipient: look for another address with positive balance change in same tx
+              let recipientAddr = 'Contract';
+              for (const otherChange of balanceChanges) {
+                if (otherChange.coinType !== USDC_COIN_TYPE) continue;
+                if (!otherChange.owner || typeof otherChange.owner !== 'object' || !('AddressOwner' in otherChange.owner)) continue;
+
+                const otherOwner = otherChange.owner.AddressOwner;
+                const otherAmount = Number(otherChange.amount);
+
+                // Find address that received coins (positive balance change, not the user)
+                if (otherOwner !== address && otherAmount > 0) {
+                  recipientAddr = otherOwner.slice(0, 6) + '...' + otherOwner.slice(-4);
+                  break;
+                }
+              }
+
               transactions.push({
-                id: tx.digest,
+                id: tx.digest + '_sent',
                 type: 'sent',
-                to: ownerAddr.slice(0, 6) + '...' + ownerAddr.slice(-4),
-                amount,
+                to: recipientAddr,
+                amount: absAmount,
                 timestamp: new Date(Number(tx.timestampMs)),
                 token: 'USDC',
                 digest: tx.digest,
               });
-            }
-          }
-        }
-      }
+            } else if (rawAmount > 0) {
+              // RECEIVED transaction: user's balance increased (positive amount)
+              // Find sender: look for another address with negative balance change in same tx
+              let senderAddr = 'External';
+              for (const otherChange of balanceChanges) {
+                if (otherChange.coinType !== USDC_COIN_TYPE) continue;
+                if (!otherChange.owner || typeof otherChange.owner !== 'object' || !('AddressOwner' in otherChange.owner)) continue;
 
-      // Process received transactions
-      for (const tx of receivedTxs.data) {
-        const balanceChanges = tx.balanceChanges || [];
+                const otherOwner = otherChange.owner.AddressOwner;
+                const otherAmount = Number(otherChange.amount);
 
-        for (const change of balanceChanges) {
-          if (change.coinType === USDC_COIN_TYPE && change.owner && typeof change.owner === 'object' && 'AddressOwner' in change.owner) {
-            const ownerAddr = change.owner.AddressOwner;
-            const amount = Math.abs(Number(change.amount)) / Math.pow(10, USDC_DECIMALS);
+                // Find address that sent coins (negative balance change, not the user)
+                if (otherOwner !== address && otherAmount < 0) {
+                  senderAddr = otherOwner.slice(0, 6) + '...' + otherOwner.slice(-4);
+                  break;
+                }
+              }
 
-            if (amount > 0 && ownerAddr === address) {
               transactions.push({
-                id: tx.digest,
+                id: tx.digest + '_received',
                 type: 'received',
-                from: 'External',
-                amount,
+                from: senderAddr,
+                amount: absAmount,
                 timestamp: new Date(Number(tx.timestampMs)),
                 token: 'USDC',
                 digest: tx.digest,
@@ -211,10 +249,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Sort by timestamp desc
-      transactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      // Deduplicate by digest (keep first occurrence)
+      const seenDigests = new Set<string>();
+      const uniqueTransactions = transactions.filter(tx => {
+        const key = tx.digest + '_' + tx.type;
+        if (seenDigests.has(key)) return false;
+        seenDigests.add(key);
+        return true;
+      });
 
-      return transactions.slice(0, 10);
+      // Sort by timestamp descending (newest first)
+      uniqueTransactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      return uniqueTransactions.slice(0, 20);
     } catch (error) {
       console.error('Failed to fetch transactions:', error);
       return [];
@@ -398,6 +445,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       linkedWallets: [],
       defaultAccountId: null,
       defaultAccountType: 'wallet',
+      defaultWalletAddress: null,
       contacts: ['@alice', '@bob'],
       kycStatus: 'unverified',
       isLoadingBalance: false,

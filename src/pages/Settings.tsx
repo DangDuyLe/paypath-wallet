@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
-import { Wallet, Building2, Scan, Check, Trash2, Shield, LogOut, Loader2, AlertTriangle, ChevronLeft, Copy } from 'lucide-react';
+import { Wallet, Building2, Scan, Check, Trash2, Shield, LogOut, Loader2, AlertTriangle, ChevronLeft, Copy, Zap } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
-import { useDisconnectWallet } from '@mysten/dapp-kit';
+import { toast } from 'sonner';
+import { useDisconnectWallet, useCurrentAccount, useCurrentWallet } from '@mysten/dapp-kit';
 import {
   addOffchainBankByQr,
   addOnchainWallet,
@@ -50,6 +51,8 @@ const Settings = () => {
     return typeof u?.username === 'string' ? u.username : null;
   })();
   const { mutate: disconnectSuiWallet } = useDisconnectWallet();
+  const currentAccount = useCurrentAccount();
+  const { currentWallet } = useCurrentWallet();
   const { username, disconnect } = useWallet();
 
   const [linkedBanks, setLinkedBanks] = useState<ApiBank[]>([]);
@@ -57,7 +60,7 @@ const Settings = () => {
   const [defaultAccountId, setDefaultAccountId] = useState<string | null>(null);
   const [defaultAccountType, setDefaultAccountType] = useState<'wallet' | 'bank'>('wallet');
   const [kycStatus, setKycStatus] = useState<'unverified' | 'pending' | 'verified'>('unverified');
-  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [settingsError, setSettingsError] = useState<string>('');
 
   const walletAddressForKyc = (() => {
@@ -77,6 +80,41 @@ const Settings = () => {
   const [scannedBankQr, setScannedBankQr] = useState<string | null>(null);
   const [scannedBank, setScannedBank] = useState<ScannedBankData | null>(null);
   const [copiedWalletId, setCopiedWalletId] = useState<string | null>(null);
+  const autoSaveAttempted = useRef<string | null>(null);
+  const [kycUrl, setKycUrl] = useState<string | null>(null);
+  const [showKycModal, setShowKycModal] = useState(false);
+
+  // Create unified display list: include currentAccount if not already in linkedWallets
+  const displayWallets = (() => {
+    const wallets = [...linkedWallets];
+    const currentAddress = currentAccount?.address;
+
+    if (currentAddress) {
+      const isCurrentInList = linkedWallets.some(w => w.address.toLowerCase() === currentAddress.toLowerCase());
+      if (!isCurrentInList) {
+        wallets.push({
+          walletId: 'current-session',
+          address: currentAddress,
+          label: 'Main Wallet',
+        });
+      }
+    }
+    return wallets;
+  })();
+
+  // Auto-save session wallet if it's the only one
+  useEffect(() => {
+    const autoSave = async () => {
+      // If we have exactly 1 wallet and it's a temporary session one
+      if (displayWallets.length === 1 && displayWallets[0].walletId === 'current-session' && displayWallets[0].address) {
+        // We only trigger this if we aren't already loading/processing
+        if (!isLoadingSettings) {
+          await handleSetDefault('current-session', 'wallet', displayWallets[0].address);
+        }
+      }
+    };
+    autoSave();
+  }, [displayWallets, isLoadingSettings]);
 
   const refreshSettings = async () => {
     setSettingsError('');
@@ -248,7 +286,15 @@ const Settings = () => {
 
   const isDefault = (id: string, type: 'wallet' | 'bank') =>
     defaultAccountId === id && defaultAccountType === type;
+
   const handleRemoveWallet = async (id: string) => {
+    if (isDefault(id, 'wallet')) {
+      toast.error('Cannot remove default wallet', {
+        description: 'Please set another wallet as default first.'
+      });
+      return;
+    }
+
     setSettingsError('');
     setIsLoadingSettings(true);
     try {
@@ -262,17 +308,61 @@ const Settings = () => {
     }
   };
 
-  const handleSetDefault = async (id: string, type: 'wallet' | 'bank') => {
+  const handleSetDefault = async (id: string, type: 'wallet' | 'bank', address?: string) => {
     setSettingsError('');
     setIsLoadingSettings(true);
     try {
+      let walletId = id;
+
+      // If it's a session wallet (not in DB), add it first
+      if (id === 'current-session' && address) {
+        const result = await addOnchainWallet({
+          address,
+          chain: 'sui',
+          label: currentWallet?.name ? `${currentWallet.name}` : 'Main Wallet',
+          walletProvider: currentWallet?.name,
+        });
+        // Get the new wallet ID from the response
+        // Get the new wallet ID from the response (backend returns walletId)
+        const newWalletId = (result.data as { walletId?: string; id?: string })?.walletId || (result.data as { id?: string })?.id;
+        if (newWalletId) {
+          walletId = newWalletId;
+        }
+        await refreshSettings();
+      }
+
       await setDefaultPaymentMethod({
-        walletId: id,
+        walletId,
         walletType: type === 'wallet' ? 'onchain' : 'offchain',
       });
       await refreshSettings();
-    } catch (e) {
-      console.error('Failed to set default', e);
+      await refreshSettings();
+    } catch (e: any) {
+      // Handle 409 Conflict (Wallet already exists)
+      if (e.response?.status === 409 && address) {
+        try {
+          // Fetch fresh list to find the existing wallet ID
+          const response = await listOnchainWallets();
+          const wallets = (response.data as any)?.wallets || [];
+          const existing = wallets.find((w: any) => w.address.toLowerCase() === address.toLowerCase());
+
+          if (existing) {
+            // Retry set default with existing ID
+            await setDefaultPaymentMethod({
+              walletId: existing.walletId,
+              walletType: 'onchain',
+            });
+            await refreshSettings();
+            return; // Success
+          } else {
+            // Wallet exists but not in our list -> belongs to another user
+            toast.error('Wallet already connected to another account');
+          }
+        } catch (retryErr) {
+          // Silent failure on retry
+        }
+      }
+
       setSettingsError('Failed to set default account');
     } finally {
       setIsLoadingSettings(false);
@@ -304,14 +394,14 @@ const Settings = () => {
       const res = await getKycLink({ walletAddress: walletAddressForKyc });
       const url = res.data?.kycLink || res.data?.url;
       if (url) {
-        window.open(url, '_blank', 'noopener,noreferrer');
+        // Open in-app browser instead of new tab
+        setKycUrl(url);
+        setShowKycModal(true);
         setKycStatus('pending');
       } else {
-        console.error('No KYC URL in response:', res.data);
         setSettingsError('Failed to get KYC link');
       }
     } catch (e) {
-      console.error('Failed to start KYC', e);
       setSettingsError('Failed to start KYC');
     } finally {
       setIsLoadingSettings(false);
@@ -569,182 +659,222 @@ const Settings = () => {
 
   // Main Settings View
   return (
-    <div className="app-container">
-      <div className="page-wrapper">
-        {/* Header */}
-        <div className="flex items-center gap-2 mb-6 animate-fade-in">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="p-2 -ml-2 rounded-full hover:bg-secondary transition-colors"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <h1 className="text-xl font-bold">Settings</h1>
-        </div>
-
-        {/* Profile */}
-        <div className="pb-6 border-b border-border mb-6 animate-slide-up">
-          <p className="label-caps mb-2">Username</p>
-          <p className="display-medium">@{apiUsername ?? username ?? ''}</p>
-        </div>
-
-        {/* Wallets */}
-        <div className="mb-6 animate-slide-up stagger-1">
-          <p className="section-title">Sui Wallets</p>
-          <div className="rounded-xl border border-border overflow-hidden">
-            {(linkedWallets || []).map((wallet) => (
-              <div key={wallet.walletId} className="row-item px-4">
-                <div className="flex items-center gap-3">
-                  <Wallet className="w-5 h-5" />
-                  <div>
-                    <p className="font-medium">{wallet.label || 'Wallet'}</p>
-                    <p className="text-sm text-muted-foreground font-mono">
-                      {wallet.address.slice(0, 8)}...{wallet.address.slice(-4)}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(wallet.address);
-                      setCopiedWalletId(wallet.walletId);
-                      setTimeout(() => setCopiedWalletId(null), 2000);
-                    }}
-                    className="p-2 hover:bg-secondary rounded-full transition-colors"
-                    title="Copy Address"
-                  >
-                    {copiedWalletId === wallet.walletId ? (
-                      <Check className="w-4 h-4 text-success" />
-                    ) : (
-                      <Copy className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </button>
-                  <div className="h-4 w-px bg-border mx-1" />
-
-                  {isDefault(wallet.walletId, 'wallet') ? (
-                    <span className="tag-success">Default</span>
-                  ) : (
-                    <button
-                      onClick={() => handleSetDefault(wallet.walletId, 'wallet')}
-                      className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
-                    >
-                      Set Default
-                    </button>
-                  )}
-                  {linkedWallets.length > 1 && (
-                    <button
-                      onClick={() => handleRemoveWallet(wallet.walletId)}
-                      className="p-2 hover:bg-destructive/10 transition-colors"
-                      title="Remove"
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+    <>
+      {/* KYC In-App Browser Modal */}
+      {showKycModal && kycUrl && (
+        <div className="fixed inset-0 z-50 bg-background flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background">
+            <h2 className="font-semibold">Verify Identity</h2>
             <button
-              onClick={() => setView('add-wallet')}
-              className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+              onClick={() => {
+                setShowKycModal(false);
+                setKycUrl(null);
+                refreshSettings();
+              }}
+              className="p-2 hover:bg-secondary rounded-full transition-colors"
             >
-              <Wallet className="w-4 h-4" />
-              Add Wallet
+              <ChevronLeft className="w-5 h-5" />
             </button>
           </div>
+          {/* Iframe */}
+          <iframe
+            src={kycUrl}
+            className="flex-1 w-full border-0"
+            allow="camera; microphone"
+            title="KYC Verification"
+          />
         </div>
+      )}
 
-        {/* Banks */}
-        <div className="mb-6 animate-slide-up stagger-2">
-          <p className="section-title">Bank Accounts</p>
-          <div className="rounded-xl border border-border overflow-hidden">
-            {linkedBanks.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">
-                No banks linked
-              </div>
-            ) : (
-              (linkedBanks || []).map((bank) => (
-                <div key={`${bank.bankId}-${bank.bankBin}-${bank.accountNumber}`} className="row-item px-4">
-                  <div className="flex items-center gap-3">
-                    <Building2 className="w-5 h-5" />
-                    <div>
-                      <p className="font-medium">{bank.label || bank.bankName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        ****{bank.accountNumber.slice(-4)} · {bank.accountName}
-                      </p>
+      <div className="app-container">
+        <div className="page-wrapper">
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-6 animate-fade-in">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="p-2 -ml-2 rounded-full hover:bg-secondary transition-colors"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <h1 className="text-xl font-bold">Settings</h1>
+          </div>
+
+          {/* Profile */}
+          <div className="pb-6 border-b border-border mb-6 animate-slide-up">
+            <p className="label-caps mb-2">Username</p>
+            <p className="display-medium">@{apiUsername ?? username ?? ''}</p>
+          </div>
+
+          {/* Wallets */}
+          <div className="mb-6 animate-slide-up stagger-1">
+            <p className="section-title">Sui Wallets</p>
+            <div className="rounded-xl border border-border overflow-hidden">
+              {displayWallets.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No wallets found
+                </div>
+              ) : (
+                displayWallets.map((wallet) => {
+                  const isActiveWallet = currentAccount?.address?.toLowerCase() === wallet.address.toLowerCase();
+                  const isTemporary = wallet.walletId === 'current-session';
+
+                  return (
+                    <div key={wallet.walletId} className="row-item px-4">
+                      <div className="flex items-center gap-3">
+                        <Wallet className="w-5 h-5" />
+                        <div>
+                          <p className="font-medium">{wallet.label || 'Wallet'}</p>
+                          <p className="text-sm text-muted-foreground font-mono">
+                            {wallet.address.slice(0, 8)}...{wallet.address.slice(-4)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(wallet.address);
+                            setCopiedWalletId(wallet.walletId);
+                            setTimeout(() => setCopiedWalletId(null), 2000);
+                          }}
+                          className="p-2 hover:bg-secondary rounded-full transition-colors"
+                          title="Copy Address"
+                        >
+                          {copiedWalletId === wallet.walletId ? (
+                            <Check className="w-4 h-4 text-success" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-muted-foreground" />
+                          )}
+                        </button>
+                        <div className="h-4 w-px bg-border mx-1" />
+
+                        {isDefault(wallet.walletId, 'wallet') || (!isLoadingSettings && displayWallets.length === 1 && linkedBanks.length === 0 && !defaultAccountId) ? (
+                          <span className="tag-success">Default</span>
+                        ) : (
+                          <button
+                            onClick={() => handleSetDefault(wallet.walletId, 'wallet', wallet.address)}
+                            className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
+                          >
+                            Set Default
+                          </button>
+                        )}
+                        {!isActiveWallet && displayWallets.length > 1 && !isTemporary && (
+                          <button
+                            onClick={() => handleRemoveWallet(wallet.walletId)}
+                            className="p-2 hover:bg-destructive/10 transition-colors"
+                            title="Remove"
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <button
+                onClick={() => setView('add-wallet')}
+                className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+              >
+                <Wallet className="w-4 h-4" />
+                Add Wallet
+              </button>
+            </div>
+          </div>
+
+          {/* Banks */}
+          <div className="mb-6 animate-slide-up stagger-2">
+            <p className="section-title">Bank Accounts</p>
+            <div className="rounded-xl border border-border overflow-hidden">
+              {linkedBanks.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  No banks linked
+                </div>
+              ) : (
+                (linkedBanks || []).map((bank) => (
+                  <div key={`${bank.bankId}-${bank.bankBin}-${bank.accountNumber}`} className="row-item px-4">
+                    <div className="flex items-center gap-3">
+                      <Building2 className="w-5 h-5" />
+                      <div>
+                        <p className="font-medium">{bank.label || bank.bankName}</p>
+                        <p className="text-sm text-muted-foreground">
+                          ****{bank.accountNumber.slice(-4)} · {bank.accountName}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isDefault(bank.bankId, 'bank') ? (
+                        <span className="tag-success">Default</span>
+                      ) : (
+                        <button
+                          onClick={() => handleSetDefault(bank.bankId, 'bank')}
+                          className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
+                        >
+                          Set Default
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleRemoveBank(bank.bankId)}
+                        className="p-2 hover:bg-destructive/10 transition-colors"
+                        title="Remove"
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {isDefault(bank.bankId, 'bank') ? (
-                      <span className="tag-success">Default</span>
-                    ) : (
-                      <button
-                        onClick={() => handleSetDefault(bank.bankId, 'bank')}
-                        className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
-                      >
-                        Set Default
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleRemoveBank(bank.bankId)}
-                      className="p-2 hover:bg-destructive/10 transition-colors"
-                      title="Remove"
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </button>
+                ))
+              )}
+              <button
+                onClick={() => setView('add-bank')}
+                className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors border-t border-border flex items-center justify-center gap-2"
+              >
+                <Building2 className="w-4 h-4" />
+                Add Bank Account
+              </button>
+            </div>
+          </div>
+
+          {/* KYC */}
+          <div className="mb-6 animate-slide-up stagger-3">
+            <p className="section-title">Identity</p>
+            <div className="rounded-xl border border-border p-4">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <Shield className="w-5 h-5" />
+                  <div>
+                    <p className="font-medium">KYC Verification</p>
+                    <p className="text-sm text-muted-foreground">Verify for higher limits</p>
                   </div>
                 </div>
-              ))
-            )}
-            <button
-              onClick={() => setView('add-bank')}
-              className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors border-t border-border flex items-center justify-center gap-2"
-            >
-              <Building2 className="w-4 h-4" />
-              Add Bank Account
-            </button>
-          </div>
-        </div>
-
-        {/* KYC */}
-        <div className="mb-6 animate-slide-up stagger-3">
-          <p className="section-title">Identity</p>
-          <div className="rounded-xl border border-border p-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <Shield className="w-5 h-5" />
-                <div>
-                  <p className="font-medium">KYC Verification</p>
-                  <p className="text-sm text-muted-foreground">Verify for higher limits</p>
-                </div>
+                <span className="tag">Unverified</span>
               </div>
-              <span className="tag">Unverified</span>
+              <button
+                onClick={handleStartKyc}
+                disabled={isLoadingSettings || !walletAddressForKyc}
+                className="w-full py-3 mt-4 border border-border hover:bg-accent transition-colors"
+              >
+                Start KYC
+              </button>
             </div>
-            <button
-              onClick={handleStartKyc}
-              disabled={isLoadingSettings || !walletAddressForKyc}
-              className="w-full py-3 mt-4 border border-border hover:bg-accent transition-colors"
-            >
-              Start KYC
-            </button>
           </div>
+
+
+
+          {/* Disconnect */}
+          <button
+            onClick={handleDisconnect}
+            className="w-full py-4 rounded-xl text-destructive text-center font-medium border border-destructive hover:bg-destructive hover:text-white transition-colors flex items-center justify-center gap-2"
+          >
+            <LogOut className="w-5 h-5" />
+            Disconnect
+          </button>
+
+          <p className="text-center text-sm text-muted-foreground mt-6">
+            HiddenWallet v1.0 · Sui Mainnet
+          </p>
         </div>
-
-
-
-        {/* Disconnect */}
-        <button
-          onClick={handleDisconnect}
-          className="w-full py-4 rounded-xl text-destructive text-center font-medium border border-destructive hover:bg-destructive hover:text-white transition-colors flex items-center justify-center gap-2"
-        >
-          <LogOut className="w-5 h-5" />
-          Disconnect
-        </button>
-
-        <p className="text-center text-sm text-muted-foreground mt-6">
-          HiddenWallet v1.0 · Sui Testnet
-        </p>
       </div>
-    </div>
+    </>
   );
 };
 

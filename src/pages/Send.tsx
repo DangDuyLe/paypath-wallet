@@ -4,7 +4,18 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { Scan, Check, AlertTriangle, ChevronDown, Wallet, Building2, Loader2, X, User, AlertCircle, CreditCard, Copy } from 'lucide-react';
 import QRScanner from '@/components/QRScanner';
-import { createPaymentOrder, confirmPaymentOrder, getPaymentOrder, syncPaymentOrder, lookupUser, scanQr } from '@/services/api';
+import { createPaymentOrder, confirmPaymentOrder, getPaymentOrder, syncPaymentOrder, lookupUser, scanQr, getDefaultPaymentMethod } from '@/services/api';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 type SendStep = 'input' | 'review' | 'sending' | 'success' | 'error';
 type ScanResult = 'none' | 'internal' | 'external' | 'error';
@@ -38,11 +49,17 @@ const Send = () => {
     defaultAccountType,
     isValidWalletAddress,
   } = useWallet();
+  const currentAccount = useCurrentAccount();
 
   const [step, setStep] = useState<SendStep>('input');
   const [recipient, setRecipient] = useState('');
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(''); // USD amount
+  const [amountVnd, setAmountVnd] = useState(''); // VND amount
+  const [amountSource, setAmountSource] = useState<'vnd' | 'usd' | null>(null); // Which input was edited
   const [error, setError] = useState('');
+
+  // Exchange rate: 1 USD = 25,500 VND
+  const EXCHANGE_RATE = 25500;
   const [showScanner, setShowScanner] = useState(false);
   const [isAutoScan, setIsAutoScan] = useState(false);
 
@@ -55,6 +72,31 @@ const Send = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  // Fetch default wallet/bank info for self-transfer check
+  const [defaultWalletAddress, setDefaultWalletAddress] = useState<string | null>(null);
+  const [defaultBankAccountNumber, setDefaultBankAccountNumber] = useState<string | null>(null);
+  useEffect(() => {
+    const fetchDefaultPayment = async () => {
+      try {
+        const res = await getDefaultPaymentMethod();
+        if (res.data?.walletType === 'onchain' && res.data?.address) {
+          setDefaultWalletAddress(res.data.address.toLowerCase());
+          setDefaultBankAccountNumber(null);
+        } else if (res.data?.walletType === 'offchain' && res.data?.accountNumber) {
+          setDefaultBankAccountNumber(res.data.accountNumber);
+          setDefaultWalletAddress(null);
+        } else {
+          setDefaultWalletAddress(null);
+          setDefaultBankAccountNumber(null);
+        }
+      } catch {
+        setDefaultWalletAddress(null);
+        setDefaultBankAccountNumber(null);
+      }
+    };
+    fetchDefaultPayment();
+  }, []);
 
   const [isChecking, setIsChecking] = useState(false);
   const [recipientValid, setRecipientValid] = useState<boolean | null>(null);
@@ -71,6 +113,7 @@ const Send = () => {
   const [externalBank, setExternalBank] = useState<ExternalBankInfo | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [scannedQrString, setScannedQrString] = useState<string | null>(null);
+  const [recipientCountry, setRecipientCountry] = useState<string | null>(null);
   // For username recipients with offchain default wallet
   const [recipientOffchainQr, setRecipientOffchainQr] = useState<string | null>(null);
   // For showing VND equivalent on success screen
@@ -80,6 +123,12 @@ const Send = () => {
     platformFee?: { feePercent: string; feeRate: number; feeAmount: number; baseFiatAmount: number; finalFiatAmount: number; cryptoEquivalent?: number | null };
     paymentInstruction: { totalCrypto: string };
   } | null>(null);
+  const [showKycPopup, setShowKycPopup] = useState(false);
+
+  const openKycPopup = (msg?: string) => {
+    if (msg) setError(msg);
+    setShowKycPopup(true);
+  };
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) {
@@ -90,6 +139,10 @@ const Send = () => {
   const apiUsername = (() => {
     const u = user as { username?: unknown } | null;
     return typeof u?.username === 'string' ? u.username : null;
+  })();
+  const kycApproved = (() => {
+    const u = user as { kycStatus?: unknown } | null;
+    return typeof u?.kycStatus === 'string' && u.kycStatus === 'approved';
   })();
 
   if (isAuthLoading) {
@@ -169,6 +222,18 @@ const Send = () => {
       // Direct wallet address
       if (input.startsWith('0x')) {
         if (isValidWalletAddress(input)) {
+          // Block if trying to send to the DEFAULT wallet
+          const inputLower = input.toLowerCase();
+
+          if (defaultWalletAddress && inputLower === defaultWalletAddress) {
+            setRecipientValid(false);
+            setRecipientAddress(null);
+            setRecipientType('none');
+            setError('Cannot send to your default wallet');
+            setIsChecking(false);
+            return;
+          }
+
           setRecipientValid(true);
           setRecipientAddress(input);
           setRecipientType('address');
@@ -195,6 +260,17 @@ const Send = () => {
           setRecipientAddress(null);
           setRecipientType('none');
           setError('User has no linked wallet');
+          setIsChecking(false);
+          return;
+        }
+
+        // Prevent self-transfer
+        const currentUsername = (apiUsername || username || '').toLowerCase();
+        if (userData.username.toLowerCase() === currentUsername) {
+          setRecipientValid(false);
+          setRecipientAddress(null);
+          setRecipientType('none');
+          setError('Cannot send to yourself');
           setIsChecking(false);
           return;
         }
@@ -253,6 +329,7 @@ const Send = () => {
       accountName: string;
       amount?: number;
       bankBin?: string;
+      country?: string;
     };
   };
 
@@ -272,6 +349,7 @@ const Send = () => {
     setError('');
     setAmount('');
     setScannedQrString(null);
+    setRecipientCountry(null);
 
     // Now start parsing
     setIsParsing(true);
@@ -337,6 +415,14 @@ const Send = () => {
         setScannedQrString(qrString);
         const bank = data.bankInfo;
 
+        // Block if trying to send to default bank account
+        if (defaultBankAccountNumber && bank.accountNumber === defaultBankAccountNumber) {
+          setScanResult('error');
+          setError('Cannot send to your default bank account');
+          setIsParsing(false);
+          return;
+        }
+
         setExternalBank({
           bankName: bank.bankName,
           accountNumber: bank.accountNumber,
@@ -345,6 +431,7 @@ const Send = () => {
           isLinkedToHiddenWallet: !!data.user,
           linkedUsername: data.user?.username,
         });
+        setRecipientCountry(bank.country ?? null);
 
         setRecipient(`${bank.accountName}`);
         setRecipientDisplayName(`${bank.accountName} (${bank.bankName})`);
@@ -356,8 +443,13 @@ const Send = () => {
           setRecipientType('username');
         }
 
-        if (bank.amount) {
-          setAmount(bank.amount.toString());
+        if (bank.amount && bank.amount > 0) {
+          // VietQR amounts are in VND - convert to USD
+          const vndAmount = bank.amount;
+          const usdAmount = vndAmount / 25500;
+          setAmountVnd(vndAmount.toString());
+          setAmount(usdAmount.toFixed(2));
+          setAmountSource('vnd');
         }
       } else {
         setScanResult('error');
@@ -377,6 +469,18 @@ const Send = () => {
     const qrStringToUse = scannedQrString || recipientOffchainQr;
 
     if ((scanResult === 'external' && externalBank) || qrStringToUse) {
+      const isVnRecipient = (recipientCountry ?? '').toUpperCase() === 'VN';
+      if (kycApproved) {
+        if (amountNum < 0.7) { setError('Minimum amount per transaction is $0.7'); return; }
+        if (amountNum > 500) { setError('Maximum amount per transaction is $500'); return; }
+      } else {
+        if (!isVnRecipient) { openKycPopup('KYC verification required for this recipient'); return; }
+        if (amountNum < 0.7) { openKycPopup('Minimum amount per transaction is $0.7'); return; }
+        if (amountNum >= 4) {
+          openKycPopup('KYC verification required for amounts of $4 or more');
+          return;
+        }
+      }
       if (isNaN(amountNum) || amountNum <= 0) { setError('Invalid amount'); return; }
       if (amountNum > usdcBalance) { setError('Insufficient balance'); return; }
       if (suiBalance < minGasBalanceSui) { setError('Not enough SUI for gas fees'); return; }
@@ -393,14 +497,31 @@ const Send = () => {
           qrString: qrStringToUse,
           usdcAmount: amountNum,
           payerWalletAddress: payerAddress,
+          recipientCountry: recipientCountry ?? undefined,
         });
 
         const { paymentInstruction, payout, exchangeInfo, platformFee } = orderRes.data;
         setFiatPayoutAmount({ amount: paymentInstruction.totalPayout, currency: payout.fiatCurrency });
         setOfframpQuote({ exchangeInfo: { feeAmount: Number(exchangeInfo.feeAmount) }, platformFee, paymentInstruction: { totalCrypto: paymentInstruction.totalCrypto } });
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Failed to get quote:', err);
-        setError('Failed to get exchange rate');
+        const message = (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+        const errorMsg = typeof message === 'string' ? message.toLowerCase() : '';
+        const needsKyc =
+          errorMsg.includes('kyc_required') ||
+          errorMsg.includes('kyc required') ||
+          errorMsg.includes('kyc') ||
+          errorMsg.includes('non_kyc') ||
+          errorMsg.includes('non-kyc') ||
+          errorMsg.includes('min_amount') ||
+          errorMsg.includes('max_amount') ||
+          errorMsg.includes('amount_per');
+
+        if (needsKyc) {
+          openKycPopup('KYC verification required for this transaction');
+        } else {
+          setError('Failed to get exchange rate');
+        }
         return;
       }
 
@@ -438,6 +559,7 @@ const Send = () => {
           qrString: qrStringToUse,
           usdcAmount: parseFloat(amount), // User enters USDC amount
           payerWalletAddress: payerAddress,
+          recipientCountry: recipientCountry ?? undefined,
         });
 
         const { id: orderId, paymentInstruction, payout, exchangeInfo, platformFee } = orderRes.data;
@@ -621,7 +743,7 @@ const Send = () => {
                   <span className="text-muted-foreground text-sm">Fee</span>
                   <span className="text-sm">
                     {offrampQuote?.platformFee?.cryptoEquivalent != null
-                      ? `$${Number(offrampQuote.platformFee.cryptoEquivalent).toLocaleString()}`
+                      ? `$${Number(offrampQuote.platformFee.cryptoEquivalent).toFixed(4)}`
                       : '-'
                     }
                   </span>
@@ -649,6 +771,38 @@ const Send = () => {
   // Input
   return (
     <>
+      <AlertDialog open={showKycPopup} onOpenChange={setShowKycPopup}>
+        <AlertDialogContent className="max-w-[340px] rounded-2xl border border-border bg-background p-0 gap-0 shadow-xl">
+          {/* Content */}
+          <div className="p-6 text-center">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+              <AlertCircle className="w-6 h-6 text-amber-500" />
+            </div>
+            <AlertDialogHeader className="space-y-2">
+              <AlertDialogTitle className="text-lg font-semibold">
+                Verification Required
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-muted-foreground">
+                Complete KYC to unlock this feature and access higher limits.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          </div>
+
+          {/* Actions - matching app button style */}
+          <div className="p-4 pt-0 flex gap-3">
+            <AlertDialogCancel className="flex-1 h-12 rounded-full border border-border bg-background hover:bg-secondary text-sm font-medium">
+              Later
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="flex-1 h-12 rounded-full bg-foreground text-background hover:bg-foreground/90 text-sm font-medium"
+              onClick={() => navigate('/settings')}
+            >
+              Verify Now
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <QRScanner
         isOpen={showScanner}
         onClose={() => {
@@ -756,11 +910,13 @@ const Send = () => {
                   </div>
                 </div>
 
-                {/* Beneficiary Name */}
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-muted-foreground">Recipient</span>
-                  <span className="font-medium text-sm">{externalBank.beneficiaryName}</span>
-                </div>
+                {/* Beneficiary Name - Hide if HiddenWallet user (already shown above) */}
+                {!externalBank.isLinkedToHiddenWallet && (
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">Recipient</span>
+                    <span className="font-medium text-sm">{externalBank.beneficiaryName}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -796,28 +952,72 @@ const Send = () => {
               </div>
             )}
 
-            {/* Amount */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
+            {/* Amount - Dual Currency Converter */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
                 <label className="text-sm font-medium text-muted-foreground">Amount</label>
                 <span className="text-sm text-muted-foreground">Balance: ${usdcBalance.toFixed(2)}</span>
               </div>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Prevent negative values
-                  if (value === '' || parseFloat(value) >= 0) {
-                    setAmount(value);
-                  }
-                  setError('');
-                }}
-                step="0.001"
-                min="0"
-                placeholder="0.00"
-                className="input-modern text-xl font-semibold"
-              />
+
+              {/* VND Input */}
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={amountVnd ? Number(amountVnd.replace(/,/g, '')).toLocaleString('en-US') : ''}
+                  onChange={(e) => {
+                    // Remove non-numeric chars except comma
+                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                    if (raw === '') {
+                      setAmountVnd('');
+                      setAmount('');
+                      setAmountSource(null);
+                    } else {
+                      const vndNum = parseInt(raw, 10);
+                      setAmountVnd(raw);
+                      // Convert to USD
+                      const usdNum = vndNum / EXCHANGE_RATE;
+                      setAmount(usdNum.toFixed(2));
+                      setAmountSource('vnd');
+                    }
+                    setError('');
+                  }}
+                  placeholder="0"
+                  className="input-modern text-lg font-semibold pr-12"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">₫</span>
+              </div>
+
+              {/* Swap indicator */}
+              <div className="flex items-center justify-center text-muted-foreground text-sm">
+                <span>≈ 1 USDC = {EXCHANGE_RATE.toLocaleString()} ₫</span>
+              </div>
+
+              {/* USD Input */}
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Allow decimal numbers
+                    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                      setAmount(value);
+                      // Convert to VND
+                      const usdNum = parseFloat(value) || 0;
+                      const vndNum = Math.round(usdNum * EXCHANGE_RATE);
+                      setAmountVnd(vndNum > 0 ? vndNum.toString() : '');
+                      setAmountSource('usd');
+                    }
+                    setError('');
+                  }}
+                  step="0.01"
+                  placeholder="0.00"
+                  className="input-modern text-lg font-semibold pr-16"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">USDC</span>
+              </div>
             </div>
 
             {/* Error */}

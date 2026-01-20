@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 import { useMemo, useState } from 'react';
-import { ArrowUpRight, ArrowDownLeft, Eye, EyeOff, Copy, Check, Users, TrendingUp, Award, Trophy } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, Eye, EyeOff, Copy, Check, Users, Award, Trophy, Crown, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Dashboard = () => {
@@ -22,13 +22,14 @@ const Dashboard = () => {
     }, [user]);
 
     const referralStats = useMemo(() => {
-        const u = user as { commissionBalance?: unknown; f0Volume?: unknown; refereesCount?: unknown } | null;
+        const u = user as { commissionBalance?: unknown; f0Volume?: unknown; refereesCount?: unknown; loyaltyTier?: unknown } | null;
 
         const totalCommission = typeof u?.commissionBalance === 'number' ? u.commissionBalance : 0;
         const f0Volume = typeof u?.f0Volume === 'number' ? u.f0Volume : 0;
         const f0Count = typeof u?.refereesCount === 'number' ? u.refereesCount : 0;
+        const loyaltyTier = typeof u?.loyaltyTier === 'string' ? u.loyaltyTier : 'Standard';
 
-        return { totalCommission, f0Volume, f0Count };
+        return { totalCommission, f0Volume, f0Count, loyaltyTier };
     }, [user]);
 
     const username = useMemo(() => {
@@ -148,11 +149,10 @@ const Dashboard = () => {
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => navigate('/settings')}
-                            className="user-pill"
+                            className="p-2.5 bg-secondary hover:bg-secondary/80 rounded-full transition-colors"
+                            title="Settings"
                         >
-                            <div className="user-avatar">
-                                <span className="text-xs font-semibold">{username[0].toUpperCase()}</span>
-                            </div>
+                            <Settings className="w-5 h-5 text-muted-foreground" />
                         </button>
                         <button
                             onClick={copyUsername}
@@ -178,30 +178,31 @@ const Dashboard = () => {
                 {/* Balance Section */}
                 <div className="py-8 text-center animate-slide-up">
                     {/* USDC Balance - Large */}
-                    <div className="flex items-baseline justify-center">
-                        {showBalance ? (
-                            <>
-                                <span className="balance-display">
-                                    ${isLoadingBalance ? '...' : balanceWhole}
-                                </span>
-                                <span className="balance-decimal">
-                                    {isLoadingBalance ? '' : balanceDecimal}
-                                </span>
-
-                            </>
-                        ) : (
-                            <span className="balance-display">$•••••</span>
-                        )}
+                    <div className="relative min-h-[48px] flex items-center justify-center">
+                        <div className="flex items-baseline justify-center">
+                            {showBalance ? (
+                                <>
+                                    <span className="balance-display">
+                                        ${isLoadingBalance ? '...' : balanceWhole}
+                                    </span>
+                                    <span className="balance-decimal">
+                                        {isLoadingBalance ? '' : balanceDecimal}
+                                    </span>
+                                </>
+                            ) : (
+                                <span className="balance-display">$•••••</span>
+                            )}
+                        </div>
                         <button
                             onClick={() => setShowBalance(!showBalance)}
-                            className="ml-2 p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-foreground transition-colors"
                         >
                             {showBalance ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
                         </button>
                     </div>
 
                     {/* SUI Balance - Small Gray */}
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="text-sm text-muted-foreground mt-1 min-h-[20px]">
                         {showBalance ? `${suiBalance.toFixed(4)} SUI` : '••• SUI'}
                     </p>
                 </div>
@@ -210,14 +211,14 @@ const Dashboard = () => {
                 <div className="flex justify-center gap-3 animate-slide-up stagger-1">
                     <button
                         onClick={() => navigate('/send')}
-                        className="btn-pill-primary"
+                        className="btn-pill-primary flex-1 max-w-[140px] min-w-[120px]"
                     >
                         <ArrowUpRight className="w-4 h-4" />
                         Send
                     </button>
                     <button
                         onClick={() => navigate('/receive')}
-                        className="btn-pill-secondary"
+                        className="btn-pill-secondary flex-1 max-w-[140px] min-w-[120px]"
                     >
                         <ArrowDownLeft className="w-4 h-4" />
                         Receive
@@ -246,30 +247,30 @@ const Dashboard = () => {
                                 <p className="text-lg font-bold">${referralStats.totalCommission}</p>
                                 <p className="text-xs text-muted-foreground">Earned</p>
                             </div>
-                            {/* Volume */}
-                            <div className="py-2 border-l border-r border-border relative group cursor-pointer" onClick={() => navigate('/leaderboard')}>
-                                <div className="absolute inset-x-2 -top-2 -bottom-2 bg-secondary/50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                                <div className="relative flex items-center justify-center gap-1.5 mb-1">
-                                    <Trophy className="w-4 h-4 text-amber-500" />
+                            {/* Tier */}
+                            <div className="py-2 border-l border-r border-border">
+                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                                    <Crown className="w-4 h-4 text-amber-500" />
                                 </div>
-                                <div className="relative">
-                                    <p className="text-lg font-bold">{formatVolume(referralStats.f0Volume)}</p>
-                                    <p className="text-xs text-muted-foreground">Volume</p>
+                                <div>
+                                    <p className="text-lg font-bold">{referralStats.loyaltyTier}</p>
+                                    <p className="text-xs text-muted-foreground">Tier</p>
                                 </div>
                             </div>
                             {/* Network */}
-                            <div className="py-2">
-                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                            <div className="py-2 relative group cursor-pointer" onClick={() => navigate('/leaderboard')}>
+                                <div className="absolute inset-x-2 -top-2 -bottom-2 bg-secondary/50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <div className="relative flex items-center justify-center gap-1.5 mb-1">
                                     <Users className="w-4 h-4 text-success" />
                                 </div>
-                                <p className="text-lg font-bold">{referralStats.f0Count}</p>
-                                <p className="text-xs text-muted-foreground">F0 Friends</p>
+                                <p className="relative text-lg font-bold">{referralStats.f0Count}</p>
+                                <p className="relative text-xs text-muted-foreground">Friends</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="mt-6 animate-slide-up stagger-3 hidden md:block">
+                <div className="mt-6 animate-slide-up stagger-3">
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="section-title mb-0">Transactions History</h3>
                         <button
