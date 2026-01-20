@@ -5,6 +5,51 @@ import { useState, useEffect } from 'react';
 import { Copy, Check, X } from 'lucide-react';
 import { getDefaultPaymentMethod } from '@/services/api';
 
+// VietQR Bank BIN mapping - map bankName to bank BIN code
+// Source: https://api.vietqr.io/v2/banks
+const BANK_BIN_MAP: Record<string, string> = {
+  'Vietcombank': '970436',
+  'VietinBank': '970415',
+  'BIDV': '970418',
+  'Agribank': '970405',
+  'Techcombank': '970407',
+  'MBBank': '970422',
+  'MB': '970422',
+  'ACB': '970416',
+  'VPBank': '970432',
+  'TPBank': '970423',
+  'Sacombank': '970403',
+  'HDBank': '970437',
+  'VIB': '970441',
+  'SHB': '970443',
+  'Eximbank': '970431',
+  'MSB': '970426',
+  'SeABank': '970440',
+  'OCB': '970448',
+  'Nam A Bank': '970428',
+  'PVcomBank': '970412',
+  'LienVietPostBank': '970449',
+  'BacABank': '970409',
+  'VietABank': '970427',
+  'ABBank': '970425',
+  'Kienlongbank': '970452',
+  'SCB': '970429',
+  'NCB': '970419',
+  'SaigonBank': '970400',
+  'PGBank': '970430',
+  'BaoVietBank': '970438',
+  'VietBank': '970433',
+  'PublicBank': '970439',
+  'GPBank': '970408',
+  'CBBank': '970444',
+  'UOB': '970458',
+  'HSBC': '458761',
+  'Woori Bank': '970457',
+  'Shinhan Bank': '970424',
+  'CIMB': '422589',
+  'Standard Chartered': '970410',
+};
+
 interface DefaultWalletInfo {
   type: 'onchain' | 'offchain';
   // For onchain
@@ -12,6 +57,7 @@ interface DefaultWalletInfo {
   // For offchain (bank)
   bankName?: string;
   accountNumber?: string;
+  accountName?: string;
 }
 
 const Receive = () => {
@@ -42,6 +88,7 @@ const Receive = () => {
             type: 'offchain',
             bankName: res.data.bankName || '',
             accountNumber: res.data.accountNumber || '',
+            accountName: res.data.accountName || '',
           });
         } else if (res.data?.walletType === 'onchain') {
           setDefaultWallet({
@@ -105,6 +152,22 @@ const Receive = () => {
   const shortAddress = defaultWallet?.address
     ? `${defaultWallet.address.slice(0, 8)}...${defaultWallet.address.slice(-6)}`
     : '';
+
+  // Generate VietQR image URL using Quicklink API
+  const getVietQRImageUrl = () => {
+    if (!defaultWallet || defaultWallet.type !== 'offchain') return null;
+
+    const bankBin = BANK_BIN_MAP[defaultWallet.bankName || ''];
+    if (!bankBin || !defaultWallet.accountNumber) return null;
+
+    // URL encode account name for safety
+    const accountNameEncoded = encodeURIComponent(defaultWallet.accountName || '');
+
+    // VietQR Quicklink format - using compact template
+    return `https://img.vietqr.io/image/${bankBin}-${defaultWallet.accountNumber}-compact.png?accountName=${accountNameEncoded}`;
+  };
+
+  const vietQRUrl = getVietQRImageUrl();
 
   return (
     <div className="app-container">
@@ -171,8 +234,23 @@ const Receive = () => {
                 )}
               </button>
             ) : (
-              /* Bank Account: Bank Name + Account Number */
+              /* Bank Account: VietQR + Bank Info */
               <>
+                {/* VietQR Image */}
+                {vietQRUrl && (
+                  <div className="card-modern p-6 flex justify-center">
+                    <img
+                      src={vietQRUrl}
+                      alt="VietQR Code"
+                      className="w-64 h-auto object-contain"
+                      onError={(e) => {
+                        // Hide image if VietQR fails to load
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+
                 {/* Bank Name - display only */}
                 <div className="card-modern w-full">
                   <p className="text-xs text-muted-foreground mb-0.5">Bank</p>
