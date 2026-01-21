@@ -802,7 +802,7 @@ const Send = () => {
             <div className="card-modern divide-y divide-border animate-slide-up">
               <div className="flex justify-between items-center py-3">
                 <span className="text-muted-foreground text-sm">From</span>
-                <span className="font-medium">@{username}</span>
+                <span className="font-medium">@{(user as any)?.username || username || 'unknown'}</span>
               </div>
               <div className="flex justify-between items-start py-3">
                 <span className="text-muted-foreground text-sm">To</span>
@@ -811,6 +811,10 @@ const Send = () => {
                   <p className="text-sm text-muted-foreground">{invoiceData.bankName}</p>
                   <p className="text-sm font-mono text-muted-foreground">{invoiceData.accountNumber}</p>
                 </div>
+              </div>
+              <div className="flex justify-between items-center py-3">
+                <span className="text-muted-foreground text-sm">USDC Amount</span>
+                <span className="font-medium">${invoiceData.usdcAmount} USDC</span>
               </div>
               <div className="flex justify-between items-center py-3">
                 <span className="text-muted-foreground text-sm">Sent at</span>
@@ -834,11 +838,14 @@ const Send = () => {
             <div className="flex gap-3 mt-6 animate-slide-up">
               <button
                 onClick={handleShareInvoice}
-                className="flex-1 py-4 rounded-xl border border-border hover:bg-secondary/50 transition-colors font-medium"
+                className="flex-1 py-4 rounded-full border border-border hover:bg-secondary/50 transition-colors font-medium"
               >
                 Share
               </button>
-              <button onClick={() => navigate('/dashboard')} className="flex-1 btn-primary">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="flex-1 py-4 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium"
+              >
                 Done
               </button>
             </div>
