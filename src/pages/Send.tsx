@@ -895,10 +895,7 @@ const Send = () => {
             <div className="card-modern divide-y divide-border">
               <div className="flex justify-between items-center py-3">
                 <span className="text-muted-foreground text-sm">From</span>
-                <div className="flex items-center gap-2">
-                  {selectedSource?.type === 'wallet' ? <Wallet className="w-4 h-4" /> : <Building2 className="w-4 h-4" />}
-                  <span className="font-medium text-sm">{selectedSource?.name}</span>
-                </div>
+                <span className="font-medium text-sm">@{(user as any)?.username || username || 'unknown'}</span>
               </div>
               <div className="flex justify-between items-center py-3">
                 <span className="text-muted-foreground text-sm">To</span>
