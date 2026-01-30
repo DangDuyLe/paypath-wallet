@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
+import { useAccount as useWagmiAccount, useSignMessage } from 'wagmi';
 import { getChallenge, getKycStatus, getProfile, postVerify, WalletChallengeResponseDto } from '@/services/api';
+import { useWallet } from './WalletContext';
 
 type AuthUser = unknown;
 
@@ -21,6 +23,13 @@ const TOKEN_STORAGE_KEY = 'jwt_token';
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const account = useCurrentAccount();
   const signPersonalMessage = useSignPersonalMessage();
+
+  // Wagmi hooks for EVM
+  const wagmiAccount = useWagmiAccount();
+  const { signMessageAsync } = useSignMessage();
+
+  // Get current chain from WalletContext
+  const { currentChain } = useWallet();
 
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_STORAGE_KEY));
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -113,9 +122,83 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [account?.address]);
+  }, [account?.address, wagmiAccount.address]);
 
   const loginWithWallet = useCallback(async (): Promise<{ needsOnboarding: boolean }> => {
+    // EVM Login Flow
+    if (currentChain === 'AVAX') {
+      if (!wagmiAccount.address) {
+        throw new Error('No EVM wallet connected');
+      }
+
+      if (isLoginInFlightRef.current) {
+        return { needsOnboarding: false };
+      }
+
+      isLoginInFlightRef.current = true;
+      setIsAuthLoading(true);
+
+      try {
+        // Get challenge from backend first (same as Sui flow)
+        const challengeRes = await getChallenge(wagmiAccount.address);
+        const challenge = challengeRes.data;
+
+        const issuedAt = new Date().toISOString();
+        const expirationTime = challenge.expiresAt;
+
+        // Construct the message using backend's nonce
+        const message = `Sign in to ${challenge.domain}\n\nAddress: ${wagmiAccount.address}\nNonce: ${challenge.nonce}\nIssued At: ${issuedAt}\nExpiration Time: ${expirationTime}`;
+
+        // Sign with Wagmi
+        const signature = await signMessageAsync({
+          account: wagmiAccount.address,
+          message
+        });
+
+        // Send to backend with EVM-specific payload
+        const verifyRes = await postVerify({
+          chain: 'EVM',
+          address: wagmiAccount.address,
+          domain: challenge.domain,
+          nonce: challenge.nonce,
+          issuedAt,
+          expirationTime,
+          message,
+          signature,
+        });
+
+        const data = verifyRes.data as unknown as {
+          accessToken?: unknown;
+          token?: unknown;
+          needsOnboarding?: unknown;
+        };
+        const accessToken =
+          typeof data?.accessToken === 'string' ? data.accessToken : typeof data?.token === 'string' ? data.token : null;
+        if (!accessToken) {
+          throw new Error('Auth succeeded but no token returned from backend');
+        }
+
+        const needsOnboarding = Boolean(data?.needsOnboarding);
+
+        localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
+        setToken(accessToken);
+
+        if (!needsOnboarding) {
+          try {
+            await refreshProfile();
+          } catch {
+            logout();
+          }
+        }
+
+        return { needsOnboarding };
+      } finally {
+        isLoginInFlightRef.current = false;
+        setIsAuthLoading(false);
+      }
+    }
+
+    // SUI Login Flow (original)
     if (!account?.address) {
       throw new Error('No wallet connected');
     }
@@ -178,7 +261,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoginInFlightRef.current = false;
       setIsAuthLoading(false);
     }
-  }, [account?.address, logout, refreshProfile, signPersonalMessage]);
+  }, [account?.address, currentChain, logout, refreshProfile, signMessageAsync, signPersonalMessage, wagmiAccount.address]);
 
   const value: AuthContextValue = useMemo(
     () => ({
@@ -201,4 +284,3 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 }
-

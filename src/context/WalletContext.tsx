@@ -1,11 +1,45 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react';
 import { useSignAndExecuteTransaction, useSuiClient, useCurrentAccount } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
+// Wagmi hooks for EVM
+import { useAccount as useWagmiAccount, useWriteContract, useConnect, useDisconnect, useReadContract, useBalance as useWagmiBalance } from 'wagmi';
+import { parseUnits, formatUnits } from 'viem';
 
+// Chain type
+export type ChainType = 'SUI' | 'AVAX' | null;
 
-// Testnet USDC via Aftermath Faucet
+// Environment variables
+const ENABLE_SUI = import.meta.env.VITE_ENABLE_SUI !== '0';
+const ENABLE_AVAX = import.meta.env.VITE_ENABLE_AVAX === '1';
+
+// Testnet USDC via Aftermath Faucet (Sui)
 const USDC_COIN_TYPE = "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC";
-const USDC_DECIMALS = 6; // Testnet Faucet USDC typically has 9 decimals
+const USDC_DECIMALS = 6;
+
+// Avalanche Fuji USDC contract
+const AVAX_USDC_CONTRACT = (import.meta.env.VITE_AVAX_USDC_CONTRACT || '0x5425890298aed601595a70AB815c96711a31Bc65') as `0x${string}`;
+const AVAX_USDC_DECIMALS = 6;
+
+// ERC20 ABI for transfer function
+const ERC20_ABI = [
+  {
+    name: 'transfer',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const;
 
 interface TransactionRecord {
   id: string;
@@ -15,12 +49,12 @@ interface TransactionRecord {
   amount: number;
   timestamp: Date;
   token: 'SUI' | 'USDC';
-  digest?: string; // Transaction hash
+  digest?: string;
 }
 
 export interface CoinBalance {
   coinType: string;
-  totalBalance: number; // Normalized (raw / 10^decimals)
+  totalBalance: number;
   rawBalance: string;
   symbol: string;
   decimals: number;
@@ -92,7 +126,7 @@ interface WalletState {
   linkedWallets: LinkedWallet[];
   defaultAccountId: string | null;
   defaultAccountType: DefaultAccountType;
-  defaultWalletAddress: string | null; // Address of default wallet for self-transfer check
+  defaultWalletAddress: string | null;
   contacts: string[];
   kycStatus: KYCStatus;
   isLoadingBalance: boolean;
@@ -100,6 +134,7 @@ interface WalletState {
   rewardPoints: number;
   referralStats: ReferralStats;
   coins: CoinBalance[];
+  currentChain: ChainType;
 }
 
 type WalletContextType = WalletState & {
@@ -119,11 +154,14 @@ type WalletContextType = WalletState & {
   getDefaultAccount: () => { id: string; type: DefaultAccountType; name: string } | null;
   refreshBalance: (address?: string) => Promise<void>;
   isValidWalletAddress: (address: string) => boolean;
+  setCurrentChain: (chain: ChainType) => void;
+  enableSui: boolean;
+  enableAvax: boolean;
+  nativeBalance: number;
+  nativeSymbol: string;
 };
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
-
-
 
 // Exchange rate: 1 USDC = 25,500 VND
 const USDC_TO_VND_RATE = 25500;
@@ -133,12 +171,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const currentAccount = useCurrentAccount();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
+  // Wagmi hooks
+  const wagmiAccount = useWagmiAccount();
+  // Read USDC balance using ERC20 balanceOf
+  const { data: avaxUsdcBalanceRaw, refetch: refetchAvaxBalance } = useReadContract({
+    address: AVAX_USDC_CONTRACT,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: wagmiAccount.address ? [wagmiAccount.address] : undefined,
+    query: { enabled: !!wagmiAccount.address },
+  });
+  const { writeContractAsync } = useWriteContract();
+  const { disconnect: wagmiDisconnect } = useDisconnect();
+  const { connect: wagmiConnect, connectors } = useConnect();
+
+  // Native AVAX balance
+  const { data: avaxNativeBalance } = useWagmiBalance({
+    address: wagmiAccount.address,
+  });
+
   const [state, setState] = useState<WalletState>({
     username: null,
     suiBalance: 0,
     usdcBalance: 0,
     balanceVnd: 0,
-    transactions: [], // No mock data, only real blockchain transactions
+    transactions: [],
     linkedBanks: [],
     linkedWallets: [],
     defaultAccountId: null,
@@ -148,20 +205,78 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     kycStatus: 'unverified',
     isLoadingBalance: false,
     isProfileLoading: false,
-
     rewardPoints: 0,
     referralStats: { totalCommission: 0, f0Volume: 0, f0Count: 0 },
     coins: [],
+    currentChain: null,
   });
 
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Fetch REAL balances and transactions from blockchain
-  // Fetch real transaction history from blockchain
+  // Auto-detect chain based on connected wallet
+  useEffect(() => {
+    const isSuiConnected = !!currentAccount?.address;
+    const isEvmConnected = wagmiAccount.isConnected;
+
+    // Priority: If only one chain is enabled, use that
+    if (ENABLE_AVAX && !ENABLE_SUI && isEvmConnected) {
+      setState(prev => {
+        if (prev.currentChain !== 'AVAX') {
+          return { ...prev, currentChain: 'AVAX' };
+        }
+        return prev;
+      });
+      return;
+    }
+
+    if (ENABLE_SUI && !ENABLE_AVAX && isSuiConnected) {
+      setState(prev => {
+        if (prev.currentChain !== 'SUI') {
+          return { ...prev, currentChain: 'SUI' };
+        }
+        return prev;
+      });
+      return;
+    }
+
+    // Both enabled: detect based on what's connected
+    if (isEvmConnected && !isSuiConnected) {
+      setState(prev => {
+        if (prev.currentChain !== 'AVAX') {
+          return { ...prev, currentChain: 'AVAX' };
+        }
+        return prev;
+      });
+    } else if (isSuiConnected && !isEvmConnected) {
+      setState(prev => {
+        if (prev.currentChain !== 'SUI') {
+          return { ...prev, currentChain: 'SUI' };
+        }
+        return prev;
+      });
+    } else if (isSuiConnected && isEvmConnected) {
+      // Both connected - keep existing or default to what's enabled
+      setState(prev => {
+        if (!prev.currentChain) {
+          return { ...prev, currentChain: ENABLE_SUI ? 'SUI' : 'AVAX' };
+        }
+        return prev;
+      });
+    } else {
+      // Nothing connected
+      setState(prev => {
+        if (prev.currentChain !== null) {
+          return { ...prev, currentChain: null };
+        }
+        return prev;
+      });
+    }
+  }, [currentAccount?.address, wagmiAccount.isConnected]);
+
+  // Fetch REAL balances and transactions from blockchain (Sui)
   const fetchTransactions = useCallback(async (address: string): Promise<TransactionRecord[]> => {
     try {
-      // Query transactions where user is sender
       const sentTxs = await suiClient.queryTransactionBlocks({
         filter: { FromAddress: address },
         options: { showInput: true, showEffects: true, showBalanceChanges: true },
@@ -169,7 +284,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         order: 'descending',
       });
 
-      // Query transactions where user is receiver
       const receivedTxs = await suiClient.queryTransactionBlocks({
         filter: { ToAddress: address },
         options: { showInput: true, showEffects: true, showBalanceChanges: true },
@@ -177,7 +291,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         order: 'descending',
       });
 
-      // Merge and deduplicate transactions by digest
       const allTxMap = new Map<string, typeof sentTxs.data[0]>();
       for (const tx of [...sentTxs.data, ...receivedTxs.data]) {
         if (!allTxMap.has(tx.digest)) {
@@ -187,11 +300,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       const transactions: TransactionRecord[] = [];
 
-      // Process all transactions
       for (const tx of allTxMap.values()) {
         const balanceChanges = tx.balanceChanges || [];
 
-        // Find USDC balance changes for the current user's address
         for (const change of balanceChanges) {
           if (change.coinType !== USDC_COIN_TYPE) continue;
           if (!change.owner || typeof change.owner !== 'object' || !('AddressOwner' in change.owner)) continue;
@@ -200,14 +311,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           const rawAmount = Number(change.amount);
           const absAmount = Math.abs(rawAmount) / Math.pow(10, USDC_DECIMALS);
 
-          // Skip dust amounts
           if (absAmount < 0.000001) continue;
 
-          // Check if this balance change is for the user's address
           if (ownerAddr === address) {
             if (rawAmount < 0) {
-              // SENT transaction: user's balance decreased (negative amount)
-              // Find recipient: look for another address with positive balance change in same tx
               let recipientAddr = 'Contract';
               for (const otherChange of balanceChanges) {
                 if (otherChange.coinType !== USDC_COIN_TYPE) continue;
@@ -216,7 +323,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 const otherOwner = otherChange.owner.AddressOwner;
                 const otherAmount = Number(otherChange.amount);
 
-                // Find address that received coins (positive balance change, not the user)
                 if (otherOwner !== address && otherAmount > 0) {
                   recipientAddr = otherOwner.slice(0, 6) + '...' + otherOwner.slice(-4);
                   break;
@@ -233,8 +339,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 digest: tx.digest,
               });
             } else if (rawAmount > 0) {
-              // RECEIVED transaction: user's balance increased (positive amount)
-              // Find sender: look for another address with negative balance change in same tx
               let senderAddr = 'External';
               for (const otherChange of balanceChanges) {
                 if (otherChange.coinType !== USDC_COIN_TYPE) continue;
@@ -243,7 +347,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 const otherOwner = otherChange.owner.AddressOwner;
                 const otherAmount = Number(otherChange.amount);
 
-                // Find address that sent coins (negative balance change, not the user)
                 if (otherOwner !== address && otherAmount < 0) {
                   senderAddr = otherOwner.slice(0, 6) + '...' + otherOwner.slice(-4);
                   break;
@@ -264,7 +367,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Deduplicate by digest (keep first occurrence)
       const seenDigests = new Set<string>();
       const uniqueTransactions = transactions.filter(tx => {
         const key = tx.digest + '_' + tx.type;
@@ -273,7 +375,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return true;
       });
 
-      // Sort by timestamp descending (newest first)
       uniqueTransactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
       return uniqueTransactions.slice(0, 20);
@@ -283,16 +384,166 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [suiClient]);
 
-  // Fetch REAL balances and transactions from blockchain
+  // Fetch AVAX transactions using viem publicClient - queries ERC20 Transfer events
+  const fetchAvaxTransactions = useCallback(async (address: string): Promise<TransactionRecord[]> => {
+    if (!address) return [];
+
+    try {
+      const AVAX_RPC_URL = import.meta.env.VITE_AVAX_RPC_URL || 'https://api.avax-test.network/ext/bc/C/rpc';
+
+      // ERC20 Transfer event signature
+      const transferEventSignature = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+      // Pad address to 32 bytes for topic filter
+      const paddedAddress = `0x000000000000000000000000${address.slice(2).toLowerCase()}`;
+
+      // Get latest block number
+      const latestBlockRes = await fetch(AVAX_RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_blockNumber',
+          params: [],
+          id: 1,
+        }),
+      });
+      const latestBlockData = await latestBlockRes.json();
+      const latestBlock = parseInt(latestBlockData.result, 16);
+
+      // Query last ~2000 blocks (about 1 hour on AVAX) to avoid RPC timeout/limits
+      const fromBlock = Math.max(0, latestBlock - 2000);
+
+      // Get sent transactions (from address)
+      const sentLogsRes = await fetch(AVAX_RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getLogs',
+          params: [{
+            address: AVAX_USDC_CONTRACT,
+            topics: [transferEventSignature, paddedAddress, null],
+            fromBlock: `0x${fromBlock.toString(16)}`,
+            toBlock: 'latest',
+          }],
+          id: 2,
+        }),
+      });
+      const sentLogsData = await sentLogsRes.json();
+      if (sentLogsData.error) {
+        throw new Error(`Sent logs error: ${JSON.stringify(sentLogsData.error)}`);
+      }
+
+      // Get received transactions (to address)
+      const receivedLogsRes = await fetch(AVAX_RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getLogs',
+          params: [{
+            address: AVAX_USDC_CONTRACT,
+            topics: [transferEventSignature, null, paddedAddress],
+            fromBlock: `0x${fromBlock.toString(16)}`,
+            toBlock: 'latest',
+          }],
+          id: 3,
+        }),
+      });
+      const receivedLogsData = await receivedLogsRes.json();
+      if (receivedLogsData.error) {
+        throw new Error(`Received logs error: ${JSON.stringify(receivedLogsData.error)}`);
+      }
+
+      const transactions: TransactionRecord[] = [];
+
+      // Process sent logs
+      const sentLogs = sentLogsData.result || [];
+      for (const log of sentLogs) {
+        const toAddress = '0x' + log.topics[2].slice(26);
+        const amount = parseInt(log.data, 16) / Math.pow(10, AVAX_USDC_DECIMALS);
+        const blockNumber = parseInt(log.blockNumber, 16);
+
+        transactions.push({
+          id: log.transactionHash + '_sent',
+          type: 'sent',
+          to: toAddress.slice(0, 6) + '...' + toAddress.slice(-4),
+          amount,
+          timestamp: new Date(Date.now() - (latestBlock - blockNumber) * 2000), // Approximate timestamp
+          token: 'USDC',
+          digest: log.transactionHash,
+        });
+      }
+
+      // Process received logs
+      const receivedLogs = receivedLogsData.result || [];
+      for (const log of receivedLogs) {
+        const fromAddress = '0x' + log.topics[1].slice(26);
+        const amount = parseInt(log.data, 16) / Math.pow(10, AVAX_USDC_DECIMALS);
+        const blockNumber = parseInt(log.blockNumber, 16);
+
+        transactions.push({
+          id: log.transactionHash + '_received',
+          type: 'received',
+          from: fromAddress.slice(0, 6) + '...' + fromAddress.slice(-4),
+          amount,
+          timestamp: new Date(Date.now() - (latestBlock - blockNumber) * 2000), // Approximate timestamp
+          token: 'USDC',
+          digest: log.transactionHash,
+        });
+      }
+
+      // Sort by timestamp descending
+      transactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      return transactions.slice(0, 20);
+    } catch (error) {
+      console.error('Failed to fetch AVAX transactions:', error);
+      return [];
+    }
+  }, []);
+
+  // Fetch REAL balances from blockchain
   const refreshBalance = useCallback(async (forcedAddress?: string) => {
-    // Determine the address to check:
-    // 1. Explicitly passed address
-    // 2. Default Wallet (if set and is a wallet type)
-    // 3. Currently connected wallet
+    const currentState = stateRef.current;
+
+    // For AVAX chain, refresh EVM balance
+    if (currentState.currentChain === 'AVAX' && wagmiAccount.address) {
+      setState(prev => ({ ...prev, isLoadingBalance: true }));
+      try {
+        await refetchAvaxBalance();
+        const balance = avaxUsdcBalanceRaw ? Number(avaxUsdcBalanceRaw) / Math.pow(10, AVAX_USDC_DECIMALS) : 0;
+        setState(prev => ({
+          ...prev,
+          usdcBalance: balance,
+          balanceVnd: balance * USDC_TO_VND_RATE,
+          isLoadingBalance: false,
+          coins: [{
+            coinType: 'AVAX_USDC',
+            totalBalance: balance,
+            rawBalance: avaxUsdcBalanceRaw?.toString() || '0',
+            symbol: 'USDC',
+            decimals: AVAX_USDC_DECIMALS,
+            iconUrl: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png',
+          }],
+        }));
+
+        // Fetch AVAX transactions
+        fetchAvaxTransactions(wagmiAccount.address).then(txHistory => {
+          setState(prev => ({ ...prev, transactions: txHistory }));
+        }).catch(err => console.warn('Failed to fetch AVAX transactions:', err));
+      } catch (error) {
+        console.error('Failed to fetch AVAX balance:', error);
+        setState(prev => ({ ...prev, isLoadingBalance: false }));
+      }
+      return;
+    }
+
+    // SUI chain balance logic
     let targetAddress = forcedAddress;
 
     if (!targetAddress) {
-      const currentState = stateRef.current;
       const currentAddress = currentAccount?.address;
 
       if (currentState.defaultAccountType === 'wallet' && currentState.defaultAccountId) {
@@ -302,7 +553,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Fallback to connected account if default is not a wallet or not found
       if (!targetAddress) {
         targetAddress = currentAddress;
       }
@@ -313,21 +563,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, isLoadingBalance: true }));
 
     try {
-      // 1. Get ALL balances
       const allBalances = await suiClient.getAllBalances({
         owner: targetAddress,
       });
 
-      // 2. Process coins - skip zero balances first
       const nonZeroCoins = allBalances.filter(c => Number(c.totalBalance) > 0);
 
-      // 3. Fetch metadata in PARALLEL (much faster than sequential)
       const coinDataPromises = nonZeroCoins.map(async (coin) => {
         let decimals = 9;
         let symbol = 'UNKNOWN';
         let iconUrl: string | null = null;
 
-        // Skip API call for known coins (instant)
         if (coin.coinType.includes('::sui::SUI')) {
           decimals = 9;
           symbol = 'SUI';
@@ -337,7 +583,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           symbol = 'USDC';
           iconUrl = 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png';
         } else {
-          // Only fetch metadata for unknown coins
           try {
             const metadata = await suiClient.getCoinMetadata({ coinType: coin.coinType });
             if (metadata) {
@@ -362,10 +607,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         } as CoinBalance;
       });
 
-      // Wait for all metadata fetches in parallel
       const coinList = await Promise.all(coinDataPromises);
 
-      // Calculate legacy fields
       let newSuiBalance = 0;
       let newUsdcBalance = 0;
       for (const coin of coinList) {
@@ -376,7 +619,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Sort coins: USDC first, then SUI, then others by balance value
       coinList.sort((a, b) => {
         if (a.symbol === 'USDC') return -1;
         if (b.symbol === 'USDC') return 1;
@@ -385,7 +627,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return b.totalBalance - a.totalBalance;
       });
 
-      // Update balance immediately (don't wait for transactions)
       setState(prev => ({
         ...prev,
         suiBalance: newSuiBalance,
@@ -395,7 +636,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         isLoadingBalance: false,
       }));
 
-      // Fetch transactions in background (non-blocking)
       fetchTransactions(targetAddress).then(txHistory => {
         setState(prev => ({ ...prev, transactions: txHistory }));
       }).catch(err => console.warn('Failed to fetch transactions:', err));
@@ -403,33 +643,104 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Failed to fetch balance:', error);
       setState(prev => ({ ...prev, isLoadingBalance: false }));
     }
-  }, [currentAccount?.address, fetchTransactions, suiClient]);
-
-
+  }, [currentAccount?.address, fetchTransactions, suiClient, wagmiAccount.address, avaxUsdcBalanceRaw, refetchAvaxBalance]);
 
   // Auto-refresh balance when account connects or changes
   useEffect(() => {
     refreshBalance();
-  }, [currentAccount?.address, refreshBalance, state.defaultAccountId, state.defaultAccountType, state.linkedWallets]);
+  }, [currentAccount?.address, wagmiAccount.address, refreshBalance, state.defaultAccountId, state.defaultAccountType, state.linkedWallets, state.currentChain]);
 
-  // Hydrate profile is handled by AuthContext/ProtectedRoute.
   useEffect(() => {
     setState((prev) => ({ ...prev, isProfileLoading: false }));
   }, []);
 
-  // Validate wallet address format (0x followed by 64 hex chars)
-  const isValidWalletAddress = (address: string): boolean => {
-    return /^0x[a-fA-F0-9]{64}$/.test(address);
-  };
+  // Validate wallet address format - supports both SUI and EVM
+  const isValidWalletAddress = useCallback((address: string): boolean => {
+    // EVM address: 0x followed by 40 hex chars (42 total)
+    const isEvmAddress = /^0x[a-fA-F0-9]{40}$/.test(address);
+    // SUI address: 0x followed by 64 hex chars (66 total)
+    const isSuiAddress = /^0x[a-fA-F0-9]{64}$/.test(address);
 
-  const walletAddress = currentAccount?.address ?? null;
+    // Validate based on current chain
+    if (state.currentChain === 'AVAX') {
+      return isEvmAddress;
+    } else if (state.currentChain === 'SUI') {
+      return isSuiAddress;
+    }
+
+    // If no chain selected, accept either format
+    return isEvmAddress || isSuiAddress;
+  }, [state.currentChain]);
+
+  // Unified wallet address
+  const walletAddress = state.currentChain === 'AVAX'
+    ? wagmiAccount.address ?? null
+    : currentAccount?.address ?? null;
+
+  // Unified isConnected
+  const isConnected = state.currentChain === 'AVAX'
+    ? wagmiAccount.isConnected
+    : Boolean(currentAccount?.address);
 
   const setUsername = (username: string) => {
     setState(prev => ({ ...prev, username }));
   };
 
-  // Send USDC Token - Returns the REAL transaction digest
+  const setCurrentChain = (chain: ChainType) => {
+    setState(prev => ({ ...prev, currentChain: chain }));
+  };
+
+  // Send USDC Token - Multi-chain support
   const sendUsdc = async (toAddress: string, amount: number): Promise<{ success: boolean; digest?: string }> => {
+    // AVAX Chain - ERC20 Transfer
+    if (state.currentChain === 'AVAX') {
+      if (!wagmiAccount.address) {
+        console.error('No AVAX wallet connected');
+        return { success: false };
+      }
+
+      if (!isValidWalletAddress(toAddress)) {
+        console.error('Invalid recipient address for AVAX');
+        return { success: false };
+      }
+
+      try {
+        const amountInUnits = parseUnits(amount.toString(), AVAX_USDC_DECIMALS);
+
+        const hash = await writeContractAsync({
+          address: AVAX_USDC_CONTRACT,
+          abi: ERC20_ABI,
+          functionName: 'transfer',
+          args: [toAddress as `0x${string}`, amountInUnits],
+          account: wagmiAccount.address,
+          chain: wagmiAccount.chain,
+        });
+
+        const newTransaction: TransactionRecord = {
+          id: hash,
+          type: 'sent',
+          to: toAddress.slice(0, 8) + '...' + toAddress.slice(-4),
+          amount,
+          timestamp: new Date(),
+          token: 'USDC',
+          digest: hash,
+        };
+
+        setState(prev => ({
+          ...prev,
+          transactions: [newTransaction, ...prev.transactions],
+        }));
+
+        setTimeout(() => refetchAvaxBalance(), 2000);
+
+        return { success: true, digest: hash };
+      } catch (error) {
+        console.error('Failed to send USDC on AVAX:', error);
+        return { success: false };
+      }
+    }
+
+    // SUI Chain - Original logic
     if (!currentAccount?.address) {
       console.error('No wallet connected');
       return { success: false };
@@ -441,10 +752,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Convert amount to smallest unit using USDC_DECIMALS
       const amountInSmallestUnit = BigInt(Math.floor(amount * Math.pow(10, USDC_DECIMALS)));
 
-      // Get user's USDC coins
       const coins = await suiClient.getCoins({
         owner: currentAccount.address,
         coinType: USDC_COIN_TYPE,
@@ -455,10 +764,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return { success: false };
       }
 
-      // Calculate total balance across all coins
       const totalBalance = coins.data.reduce((sum, coin) => sum + BigInt(coin.balance), BigInt(0));
 
-      // Check if total balance is sufficient
       if (totalBalance < amountInSmallestUnit) {
         console.error(`Insufficient balance. Required: ${amountInSmallestUnit}, Available: ${totalBalance}`);
         return { success: false };
@@ -466,27 +773,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       const tx = new Transaction();
 
-      // Merge all coins into one to ensure sufficient balance
       const primaryCoin = coins.data[0];
       const restCoins = coins.data.slice(1);
 
       if (restCoins.length > 0) {
-        // Merge all other coins into the primary coin
         tx.mergeCoins(
           tx.object(primaryCoin.coinObjectId),
           restCoins.map(coin => tx.object(coin.coinObjectId))
         );
       }
 
-      // Split the exact amount from the merged coin
       const [coinToSend] = tx.splitCoins(tx.object(primaryCoin.coinObjectId), [
         tx.pure.u64(amountInSmallestUnit),
       ]);
 
-      // Transfer to recipient
       tx.transferObjects([coinToSend], tx.pure.address(toAddress));
 
-      // Sign and execute with Promise to capture REAL digest
       return new Promise((resolve) => {
         signAndExecute(
           {
@@ -494,17 +796,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           },
           {
             onSuccess: (result) => {
-
-
-              // Add transaction record with REAL digest
               const newTransaction: TransactionRecord = {
-                id: result.digest, // Use REAL digest as ID
+                id: result.digest,
                 type: 'sent',
                 to: toAddress.slice(0, 8) + '...' + toAddress.slice(-4),
                 amount,
                 timestamp: new Date(),
                 token: 'USDC',
-                digest: result.digest, // Store REAL digest
+                digest: result.digest,
               };
 
               setState(prev => ({
@@ -512,7 +811,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
                 transactions: [newTransaction, ...prev.transactions],
               }));
 
-              // Refresh balance after sending
               setTimeout(refreshBalance, 2000);
 
               resolve({ success: true, digest: result.digest });
@@ -531,6 +829,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   const disconnect = () => {
+    // Disconnect Wagmi if connected
+    if (wagmiAccount.isConnected) {
+      wagmiDisconnect();
+    }
+
     setState({
       username: null,
       suiBalance: 0,
@@ -546,9 +849,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       kycStatus: 'unverified',
       isLoadingBalance: false,
       isProfileLoading: false,
-      rewardPoints: 1250,
-      referralStats: { totalCommission: 15.5, f0Volume: 50000, f0Count: 12 },
+      rewardPoints: 0,
+      referralStats: { totalCommission: 0, f0Volume: 0, f0Count: 0 },
       coins: [],
+      currentChain: null,
     });
   };
 
@@ -672,7 +976,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     <WalletContext.Provider
       value={{
         ...state,
-        isConnected: Boolean(walletAddress),
+        isConnected,
         walletAddress,
         setUsername,
         sendUsdc,
@@ -688,6 +992,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         getDefaultAccount,
         refreshBalance,
         isValidWalletAddress,
+        setCurrentChain,
+        enableSui: ENABLE_SUI,
+        enableAvax: ENABLE_AVAX,
+        nativeBalance: state.currentChain === 'AVAX'
+          ? (avaxNativeBalance ? Number(formatUnits(avaxNativeBalance.value, avaxNativeBalance.decimals)) : 0)
+          : state.suiBalance,
+        nativeSymbol: state.currentChain === 'AVAX' ? 'AVAX' : 'SUI',
       }}
     >
       {children}

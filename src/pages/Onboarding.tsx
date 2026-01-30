@@ -6,12 +6,14 @@ import { useAuth } from '@/context/AuthContext';
 import { checkUsername, postOnboarding, postRegister } from '@/services/api';
 import { toast } from 'sonner';
 import { Mail, Users } from 'lucide-react';
+import { useAccount as useWagmiAccount } from 'wagmi';
 
 const Onboarding = () => {
   const navigate = useNavigate();
   const currentAccount = useCurrentAccount();
+  const wagmiAccount = useWagmiAccount();
   const { isAuthenticated, refreshProfile } = useAuth();
-  const { setUsername, username: existingUsername } = useWallet();
+  const { setUsername, username: existingUsername, walletAddress, currentChain } = useWallet();
   const [inputUsername, setInputUsername] = useState('');
   const [email, setEmail] = useState('');
   const [referral, setReferral] = useState('');
@@ -68,13 +70,16 @@ const Onboarding = () => {
         referralUsername: referral || undefined,
       });
 
-      if (!currentAccount?.address) {
+      // Use walletAddress from context (works for both Sui and EVM)
+      const connectedAddress = walletAddress || currentAccount?.address || wagmiAccount.address;
+
+      if (!connectedAddress) {
         throw new Error('No wallet connected');
       }
 
       try {
         await postRegister({
-          walletAddress: currentAccount.address,
+          walletAddress: connectedAddress,
           username: clean,
           email: email || undefined,
         });

@@ -48,6 +48,8 @@ const Send = () => {
     defaultAccountId,
     defaultAccountType,
     isValidWalletAddress,
+    nativeBalance,
+    nativeSymbol,
   } = useWallet();
   const currentAccount = useCurrentAccount();
 
@@ -555,7 +557,12 @@ const Send = () => {
       }
       if (isNaN(amountNum) || amountNum <= 0) { setError('Invalid amount'); return; }
       if (amountNum > usdcBalance) { setError('Insufficient balance'); return; }
-      if (suiBalance < minGasBalanceSui) { setError('Not enough SUI for gas fees'); return; }
+
+      // Check gas balance (AVAX or SUI)
+      if (nativeBalance < 0.001) {
+        setError(`Not enough ${nativeSymbol} for gas fees`);
+        return;
+      }
 
       // Get quote from BE to show VND equivalent + use live exchange rate
       try {
@@ -613,7 +620,13 @@ const Send = () => {
     if (!recipientValid || !recipientAddress) { setError('Verify recipient first'); return; }
     if (isNaN(amountNum) || amountNum <= 0) { setError('Invalid amount'); return; }
     if (amountNum > usdcBalance) { setError('Insufficient USDC balance'); return; }
-    if (suiBalance < minGasBalanceSui) { setError('Not enough SUI for gas fees'); return; }
+
+    // Check gas balance (AVAX or SUI)
+    if (nativeBalance < 0.001) {
+      setError(`Not enough ${nativeSymbol} for gas fees`);
+      return;
+    }
+
     setStep('review');
   };
 
@@ -938,7 +951,7 @@ const Send = () => {
               )}
               <div className="flex justify-between items-center py-3">
                 <span className="text-muted-foreground text-sm">Network Fee</span>
-                <span className="text-sm">~{networkFeeSui.toFixed(3)} SUI</span>
+                <span className="text-sm">~{(nativeSymbol === 'AVAX' ? 0.002 : networkFeeSui).toFixed(3)} {nativeSymbol}</span>
               </div>
               <div className="flex justify-between items-center py-3 bg-secondary -mx-4 px-4 rounded-xl">
                 <span className="font-semibold text-sm">Total</span>

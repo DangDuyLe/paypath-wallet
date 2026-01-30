@@ -11,10 +11,11 @@ const Dashboard = () => {
 
     const {
         usdcBalance,
-        suiBalance,
         transactions,
         isConnected,
         isLoadingBalance,
+        nativeBalance,
+        nativeSymbol,
     } = useWallet();
     const rewardPoints = useMemo(() => {
         const u = user as { loyaltyPoints?: unknown } | null;
@@ -201,9 +202,9 @@ const Dashboard = () => {
                         </button>
                     </div>
 
-                    {/* SUI Balance - Small Gray */}
+                    {/* Native Token Balance (SUI or AVAX) */}
                     <p className="text-sm text-muted-foreground mt-1 min-h-[20px]">
-                        {showBalance ? `${suiBalance.toFixed(4)} SUI` : '••• SUI'}
+                        {showBalance ? `${nativeBalance.toFixed(4)} ${nativeSymbol}` : `••• ${nativeSymbol}`}
                     </p>
                 </div>
 

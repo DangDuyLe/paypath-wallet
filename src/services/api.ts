@@ -56,6 +56,7 @@ export type WalletChallengeResponseDto = {
 };
 
 export type WalletVerifyRequestDto = {
+  chain?: 'SUI' | 'EVM';
   address: string;
   domain?: string;
   nonce: string;

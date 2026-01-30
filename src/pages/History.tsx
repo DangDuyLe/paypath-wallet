@@ -11,7 +11,15 @@ const History = () => {
         transactions,
         isLoadingBalance,
         refreshBalance,
+        currentChain,
     } = useWallet();
+
+    const getExplorerUrl = (hash: string) => {
+        if (currentChain === 'AVAX') {
+            return `https://testnet.snowtrace.io/tx/${hash}`;
+        }
+        return `https://suiscan.xyz/mainnet/tx/${hash}`;
+    };
 
     const [copiedDigest, setCopiedDigest] = useState<string | null>(null);
 
@@ -71,7 +79,7 @@ const History = () => {
                         <h1 className="text-xl font-bold">Transaction History</h1>
                     </div>
                     <button
-                        onClick={refreshBalance}
+                        onClick={() => refreshBalance()}
                         disabled={isLoadingBalance}
                         className="p-2 border border-border rounded-xl hover:bg-secondary transition-colors disabled:opacity-50"
                     >
@@ -116,7 +124,7 @@ const History = () => {
                                                     <div className="flex items-center gap-1">
                                                         <span className="text-xs text-muted-foreground">•</span>
                                                         <a
-                                                            href={`https://suiscan.xyz/mainnet/tx/${txHash}`}
+                                                            href={getExplorerUrl(txHash)}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="text-xs text-muted-foreground font-mono hover:text-foreground hover:underline transition-colors"

@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { WalletProvider } from "@/context/WalletContext";
 import { AuthProvider } from "@/context/AuthContext";
-import { SuiProvider } from "@/providers/SuiProvider";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
@@ -19,73 +18,71 @@ import Leaderboard from "./pages/Leaderboard";
 import NotFound from "./pages/NotFound";
 
 const App = () => (
-  <SuiProvider>
-    <TooltipProvider>
-      <WalletProvider>
-        <AuthProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/onboarding" element={<Onboarding />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/send"
-                element={
-                  <ProtectedRoute>
-                    <Send />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/receive"
-                element={
-                  <ProtectedRoute>
-                    <Receive />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/history"
-                element={
-                  <ProtectedRoute>
-                    <History />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <Settings />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/leaderboard"
-                element={
-                  <ProtectedRoute>
-                    <Leaderboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            <MobileBottomNav />
-          </BrowserRouter>
-        </AuthProvider>
-      </WalletProvider>
-    </TooltipProvider>
-  </SuiProvider>
+  <TooltipProvider>
+    <WalletProvider>
+      <AuthProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/send"
+              element={
+                <ProtectedRoute>
+                  <Send />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/receive"
+              element={
+                <ProtectedRoute>
+                  <Receive />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <History />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/leaderboard"
+              element={
+                <ProtectedRoute>
+                  <Leaderboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+          <MobileBottomNav />
+        </BrowserRouter>
+      </AuthProvider>
+    </WalletProvider>
+  </TooltipProvider>
 );
 
 export default App;

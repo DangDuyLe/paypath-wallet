@@ -6,6 +6,7 @@ import { Wallet, Building2, Scan, Check, Trash2, Shield, LogOut, Loader2, AlertT
 import QRScanner from '@/components/QRScanner';
 import { toast } from 'sonner';
 import { useDisconnectWallet, useCurrentAccount, useCurrentWallet } from '@mysten/dapp-kit';
+import { useAccount as useWagmiAccount, useDisconnect as useWagmiDisconnect } from 'wagmi';
 import {
   addOffchainBankByQr,
   addOnchainWallet,
@@ -53,7 +54,12 @@ const Settings = () => {
   const { mutate: disconnectSuiWallet } = useDisconnectWallet();
   const currentAccount = useCurrentAccount();
   const { currentWallet } = useCurrentWallet();
-  const { username, disconnect, coins, isLoadingBalance, refreshBalance } = useWallet();
+  const { username, disconnect, coins, isLoadingBalance, refreshBalance, currentChain, enableSui, enableAvax, walletAddress } = useWallet();
+
+  // Wagmi for EVM
+  const wagmiAccount = useWagmiAccount();
+  const { disconnect: disconnectWagmi } = useWagmiDisconnect();
+  const [copiedEvmAddress, setCopiedEvmAddress] = useState(false);
 
   const [linkedBanks, setLinkedBanks] = useState<ApiBank[]>([]);
   const [linkedWallets, setLinkedWallets] = useState<ApiWallet[]>([]);
@@ -202,7 +208,12 @@ const Settings = () => {
   }
 
   const handleDisconnect = () => {
-    disconnectSuiWallet();
+    if (currentChain === 'AVAX' || wagmiAccount.isConnected) {
+      disconnectWagmi();
+    }
+    if (currentChain === 'SUI' || currentAccount?.address) {
+      disconnectSuiWallet();
+    }
     disconnect();
     logout();
     navigate('/login');
@@ -729,119 +740,160 @@ const Settings = () => {
             <p className="display-medium">@{apiUsername ?? username ?? ''}</p>
           </div>
 
-
-          {/* Wallets */}
-          <div className="mb-6 animate-slide-up stagger-1">
-            <p className="section-title">Sui Wallets</p>
-            <div className="rounded-xl border border-border overflow-hidden">
-              {displayWallets.length === 0 ? (
-                <div className="p-4 text-center text-sm text-muted-foreground">
-                  No wallets found
+          {/* EVM Wallet (when AVAX mode is active) */}
+          {enableAvax && wagmiAccount.isConnected && (
+            <div className="mb-6 animate-slide-up stagger-1">
+              <p className="section-title">Avalanche Wallet</p>
+              <div className="rounded-xl border border-border overflow-hidden">
+                <div className="row-item px-4">
+                  <div className="flex items-center gap-3">
+                    <Wallet className="w-5 h-5" />
+                    <div>
+                      <p className="font-medium">MetaMask</p>
+                      <p className="text-sm text-muted-foreground font-mono">
+                        {wagmiAccount.address?.slice(0, 8)}...{wagmiAccount.address?.slice(-4)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        if (wagmiAccount.address) {
+                          navigator.clipboard.writeText(wagmiAccount.address);
+                          setCopiedEvmAddress(true);
+                          setTimeout(() => setCopiedEvmAddress(false), 2000);
+                        }
+                      }}
+                      className="p-2 hover:bg-secondary rounded-full transition-colors"
+                      title="Copy Address"
+                    >
+                      {copiedEvmAddress ? (
+                        <Check className="w-4 h-4 text-success" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </button>
+                    <span className="tag-success">Connected</span>
+                  </div>
                 </div>
-              ) : (
-                displayWallets.map((wallet) => {
-                  const isActiveWallet = currentAccount?.address?.toLowerCase() === wallet.address.toLowerCase();
-                  const isTemporary = wallet.walletId === 'current-session';
-                  const isDefaultWallet = isDefault(wallet.walletId, 'wallet') || (!isLoadingSettings && displayWallets.length === 1 && linkedBanks.length === 0 && !defaultAccountId);
+              </div>
+            </div>
+          )}
 
-                  return (
-                    <div key={wallet.walletId} className="border-b border-border last:border-b-0">
-                      <div className="row-item px-4">
-                        <div className="flex items-center gap-3">
-                          <Wallet className="w-5 h-5" />
-                          <div>
-                            <p className="font-medium">{wallet.label || 'Wallet'}</p>
-                            <p className="text-sm text-muted-foreground font-mono">
-                              {wallet.address.slice(0, 8)}...{wallet.address.slice(-4)}
-                            </p>
+          {/* Sui Wallets */}
+          {enableSui && (
+            <div className="mb-6 animate-slide-up stagger-1">
+              <p className="section-title">Sui Wallets</p>
+              <div className="rounded-xl border border-border overflow-hidden">
+                {displayWallets.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    No wallets found
+                  </div>
+                ) : (
+                  displayWallets.map((wallet) => {
+                    const isActiveWallet = currentAccount?.address?.toLowerCase() === wallet.address.toLowerCase();
+                    const isTemporary = wallet.walletId === 'current-session';
+                    const isDefaultWallet = isDefault(wallet.walletId, 'wallet') || (!isLoadingSettings && displayWallets.length === 1 && linkedBanks.length === 0 && !defaultAccountId);
+
+                    return (
+                      <div key={wallet.walletId} className="border-b border-border last:border-b-0">
+                        <div className="row-item px-4">
+                          <div className="flex items-center gap-3">
+                            <Wallet className="w-5 h-5" />
+                            <div>
+                              <p className="font-medium">{wallet.label || 'Wallet'}</p>
+                              <p className="text-sm text-muted-foreground font-mono">
+                                {wallet.address.slice(0, 8)}...{wallet.address.slice(-4)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(wallet.address);
+                                setCopiedWalletId(wallet.walletId);
+                                setTimeout(() => setCopiedWalletId(null), 2000);
+                              }}
+                              className="p-2 hover:bg-secondary rounded-full transition-colors"
+                              title="Copy Address"
+                            >
+                              {copiedWalletId === wallet.walletId ? (
+                                <Check className="w-4 h-4 text-success" />
+                              ) : (
+                                <Copy className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </button>
+                            <div className="h-4 w-px bg-border mx-1" />
+
+                            {isDefaultWallet ? (
+                              <span className="tag-success">Default</span>
+                            ) : (
+                              <button
+                                onClick={() => handleSetDefault(wallet.walletId, 'wallet', wallet.address)}
+                                className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
+                              >
+                                Set Default
+                              </button>
+                            )}
+                            {!isActiveWallet && displayWallets.length > 1 && !isTemporary && (
+                              <button
+                                onClick={() => handleRemoveWallet(wallet.walletId)}
+                                className="p-2 hover:bg-destructive/10 transition-colors"
+                                title="Remove"
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </button>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(wallet.address);
-                              setCopiedWalletId(wallet.walletId);
-                              setTimeout(() => setCopiedWalletId(null), 2000);
-                            }}
-                            className="p-2 hover:bg-secondary rounded-full transition-colors"
-                            title="Copy Address"
-                          >
-                            {copiedWalletId === wallet.walletId ? (
-                              <Check className="w-4 h-4 text-success" />
+
+                        {/* Inline balance for default wallet */}
+                        {isDefaultWallet && defaultAccountType !== 'bank' && (
+                          <div className="px-4 pb-3 pt-1 bg-secondary/30">
+                            {isLoadingBalance ? (
+                              <p className="text-xs text-muted-foreground">Loading balance...</p>
+                            ) : coins.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">No coins</p>
                             ) : (
-                              <Copy className="w-4 h-4 text-muted-foreground" />
+                              <div className="flex flex-wrap gap-2">
+                                {(showAllCoins ? coins : coins.slice(0, 3)).map((coin) => (
+                                  <div key={coin.coinType} className="flex items-center gap-1.5 bg-background rounded-full px-2 py-1 text-xs">
+                                    {coin.iconUrl ? (
+                                      <img src={coin.iconUrl} alt={coin.symbol} className="w-4 h-4 rounded-full" />
+                                    ) : (
+                                      <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">{coin.symbol[0]}</span>
+                                    )}
+                                    <span className="font-medium">
+                                      {coin.totalBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {coin.symbol}
+                                    </span>
+                                  </div>
+                                ))}
+                                {coins.length > 3 && (
+                                  <button
+                                    onClick={() => setShowAllCoins(!showAllCoins)}
+                                    className="text-xs text-muted-foreground hover:text-primary"
+                                  >
+                                    {showAllCoins ? 'Less' : `+${coins.length - 3} more`}
+                                  </button>
+                                )}
+                              </div>
                             )}
-                          </button>
-                          <div className="h-4 w-px bg-border mx-1" />
-
-                          {isDefaultWallet ? (
-                            <span className="tag-success">Default</span>
-                          ) : (
-                            <button
-                              onClick={() => handleSetDefault(wallet.walletId, 'wallet', wallet.address)}
-                              className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors"
-                            >
-                              Set Default
-                            </button>
-                          )}
-                          {!isActiveWallet && displayWallets.length > 1 && !isTemporary && (
-                            <button
-                              onClick={() => handleRemoveWallet(wallet.walletId)}
-                              className="p-2 hover:bg-destructive/10 transition-colors"
-                              title="Remove"
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
-
-                      {/* Inline balance for default wallet */}
-                      {isDefaultWallet && defaultAccountType !== 'bank' && (
-                        <div className="px-4 pb-3 pt-1 bg-secondary/30">
-                          {isLoadingBalance ? (
-                            <p className="text-xs text-muted-foreground">Loading balance...</p>
-                          ) : coins.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">No coins</p>
-                          ) : (
-                            <div className="flex flex-wrap gap-2">
-                              {(showAllCoins ? coins : coins.slice(0, 3)).map((coin) => (
-                                <div key={coin.coinType} className="flex items-center gap-1.5 bg-background rounded-full px-2 py-1 text-xs">
-                                  {coin.iconUrl ? (
-                                    <img src={coin.iconUrl} alt={coin.symbol} className="w-4 h-4 rounded-full" />
-                                  ) : (
-                                    <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">{coin.symbol[0]}</span>
-                                  )}
-                                  <span className="font-medium">
-                                    {coin.totalBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {coin.symbol}
-                                  </span>
-                                </div>
-                              ))}
-                              {coins.length > 3 && (
-                                <button
-                                  onClick={() => setShowAllCoins(!showAllCoins)}
-                                  className="text-xs text-muted-foreground hover:text-primary"
-                                >
-                                  {showAllCoins ? 'Less' : `+${coins.length - 3} more`}
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-              <button
-                onClick={() => setView('add-wallet')}
-                className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
-              >
-                <Wallet className="w-4 h-4" />
-                Add Wallet
-              </button>
+                    );
+                  })
+                )}
+                <button
+                  onClick={() => setView('add-wallet')}
+                  className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Add Wallet
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Banks */}
           <div className="mb-6 animate-slide-up stagger-2">
