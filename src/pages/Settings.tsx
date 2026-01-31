@@ -447,7 +447,19 @@ const Settings = () => {
     setSettingsError('');
     setIsLoadingSettings(true);
     try {
-      const res = await getKycLink({ walletAddress: walletAddressForKyc });
+      // Checksum the address if it's EVM (starts with 0x and length 42)
+      // This is crucial for some backend APIs like Gaian that expect checksummed addresses
+      let formattedAddress = walletAddressForKyc;
+      if (walletAddressForKyc.startsWith('0x') && walletAddressForKyc.length === 42) {
+        try {
+          const { getAddress } = await import('viem');
+          formattedAddress = getAddress(walletAddressForKyc);
+        } catch (err) {
+          console.warn('Failed to checksum address, sending as is', err);
+        }
+      }
+
+      const res = await getKycLink({ walletAddress: formattedAddress });
       const url = res.data?.kycLink || res.data?.url;
       if (url) {
         // Open in-app browser instead of new tab
@@ -459,6 +471,7 @@ const Settings = () => {
       }
     } catch (e) {
       setSettingsError('Failed to start KYC');
+      console.error('KYC Error:', e);
     } finally {
       setIsLoadingSettings(false);
     }
