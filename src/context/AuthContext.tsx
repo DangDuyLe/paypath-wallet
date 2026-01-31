@@ -65,7 +65,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!walletAddress) return;
 
     try {
-      await getKycStatus(walletAddress);
+      // Checksum if EVM
+      let formattedAddress = walletAddress;
+      if (walletAddress.startsWith('0x') && walletAddress.length === 42) {
+        try {
+          const { getAddress } = await import('viem');
+          formattedAddress = getAddress(walletAddress);
+        } catch (err) {
+          console.warn('Failed to checksum address, sending as is', err);
+        }
+      }
+      await getKycStatus(formattedAddress);
     } catch {
       // ignore KYC sync errors
     }
@@ -100,7 +110,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (walletAddressForKyc) {
           try {
-            await getKycStatus(walletAddressForKyc);
+            // Checksum if EVM
+            let formattedAddress = walletAddressForKyc;
+            if (walletAddressForKyc.startsWith('0x') && walletAddressForKyc.length === 42) {
+              try {
+                const { getAddress } = await import('viem');
+                formattedAddress = getAddress(walletAddressForKyc);
+              } catch (err) {
+                console.warn('Failed to checksum address, sending as is', err);
+              }
+            }
+            await getKycStatus(formattedAddress);
           } catch {
             // ignore KYC sync errors on refresh
           }
