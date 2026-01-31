@@ -130,26 +130,33 @@ const Onboarding = () => {
 
         {/* Middle */}
         <div className="py-6 animate-slide-up w-full max-w-full overflow-hidden space-y-6">
-          {/* Username Input */}
+          {/* Username Input - Using textarea for MetaMask browser compatibility */}
           <div>
             <div className="flex items-center w-full min-w-0">
               <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
-              <input
-                type="text"
+              <textarea
                 inputMode="text"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck={false}
                 enterKeyHint="done"
+                rows={1}
                 value={inputUsername}
                 onChange={(e) => {
-                  setInputUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                  // Remove newlines and sanitize input
+                  const cleaned = e.target.value.replace(/\n/g, '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+                  setInputUsername(cleaned);
                   setError('');
                 }}
-                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
                 placeholder="username"
-                className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
+                className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors resize-none overflow-hidden"
                 style={{
                   WebkitAppearance: 'none',
                   touchAction: 'manipulation',
@@ -157,6 +164,9 @@ const Onboarding = () => {
                   zIndex: 10,
                   WebkitUserSelect: 'text',
                   userSelect: 'text',
+                  height: 'auto',
+                  minHeight: '48px',
+                  lineHeight: '1.5',
                 }}
               />
             </div>
