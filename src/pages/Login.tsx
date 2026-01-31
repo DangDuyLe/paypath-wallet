@@ -15,10 +15,10 @@ const isMobileDevice = (): boolean => {
   return mobileRegex.test(userAgent.toLowerCase()) || isSmallScreen;
 };
 
-const isInSlushBrowser = (): boolean => {
+const isInWalletBrowser = (): boolean => {
   if (typeof window === 'undefined') return false;
   const userAgent = navigator.userAgent.toLowerCase();
-  return userAgent.includes('slush') || userAgent.includes('suiwallet');
+  return userAgent.includes('slush') || userAgent.includes('suiwallet') || userAgent.includes('metamask');
 };
 
 const Login = () => {
@@ -29,7 +29,7 @@ const Login = () => {
   const { mutate: disconnectSuiWallet } = useDisconnectWallet();
   const [hasClickedConnect, setHasClickedConnect] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isInWalletBrowser, setIsInWalletBrowser] = useState(false);
+  const [isInWalletBrowserState, setIsInWalletBrowserState] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showWalletOptions, setShowWalletOptions] = useState(false);
   const [showChainSelector, setShowChainSelector] = useState(false);
@@ -56,7 +56,7 @@ const Login = () => {
 
   useEffect(() => {
     setIsMobile(isMobileDevice());
-    setIsInWalletBrowser(isInSlushBrowser());
+    setIsInWalletBrowserState(isInWalletBrowser());
   }, []);
 
   useEffect(() => {
@@ -143,7 +143,7 @@ const Login = () => {
     }
   };
 
-  const showMobileInstructions = isMobile && !isInWalletBrowser && enableSui && !enableAvax;
+  const showMobileInstructions = isMobile && !isInWalletBrowserState && !isAnyWalletConnected;
 
   // Render connected wallet card
   const renderConnectedCard = () => (
@@ -215,46 +215,77 @@ const Login = () => {
           ) : showMobileInstructions ? (
             /* Mobile: Show instructions when not connected */
             <>
-              <div className="card-modern p-5 space-y-4">
-                <p className="text-sm font-medium text-center">
-                  Open in Slush Wallet to connect
-                </p>
+              {/* MetaMask Deep Link (AVAX) */}
+              {enableAvax && (
+                <div className="card-modern p-5 space-y-4 mb-4">
+                  <p className="text-sm font-medium text-center">
+                    Open in MetaMask to connect
+                  </p>
 
-                <button
-                  onClick={copyAppLink}
-                  className="btn-primary flex items-center justify-center gap-2"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-5 h-5" />
-                      Link Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-5 h-5" />
-                      Copy App Link
-                    </>
-                  )}
-                </button>
+                  <a
+                    href={`https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`}
+                    className="btn-primary flex items-center justify-center gap-2 no-underline text-primary-foreground"
+                  >
+                    <Wallet className="w-5 h-5" />
+                    Open in MetaMask
+                  </a>
 
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <div className="flex gap-3 items-center">
-                    <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">1</span>
-                    <span>Open <strong className="text-foreground">Slush Wallet</strong></span>
-                  </div>
-                  <div className="flex gap-3 items-center">
-                    <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">2</span>
-                    <span>Go to <strong className="text-foreground">Apps</strong> tab</span>
-                  </div>
-                  <div className="flex gap-3 items-center">
-                    <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">3</span>
-                    <span>Paste link & tap <strong className="text-foreground">Connect</strong></span>
+                  <div className="text-center">
+                    <button
+                      onClick={() => copyAppLink()}
+                      className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-1 mx-auto"
+                    >
+                      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      {copied ? 'Copied Link' : 'Copy Link'}
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
 
+              {/* Slush/Sui Deep Link (SUI) */}
               {enableSui && (
-                <div onClick={handleConnectClick}>
+                <div className="card-modern p-5 space-y-4">
+                  <p className="text-sm font-medium text-center">
+                    Open in Slush Wallet to connect
+                  </p>
+
+                  <button
+                    onClick={copyAppLink}
+                    className="btn-primary flex items-center justify-center gap-2"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-5 h-5" />
+                        Link Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-5 h-5" />
+                        Copy App Link
+                      </>
+                    )}
+                  </button>
+
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <div className="flex gap-3 items-center">
+                      <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">1</span>
+                      <span>Open <strong className="text-foreground">Slush Wallet</strong></span>
+                    </div>
+                    <div className="flex gap-3 items-center">
+                      <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">2</span>
+                      <span>Go to <strong className="text-foreground">Apps</strong> tab</span>
+                    </div>
+                    <div className="flex gap-3 items-center">
+                      <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">3</span>
+                      <span>Paste link & tap <strong className="text-foreground">Connect</strong></span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Allow direct connect attempt even on mobile (fallback) */}
+              {enableSui && (
+                <div onClick={handleConnectClick} className="mt-4 opacity-80 scale-90">
                   <div className="sui-connect-wrapper">
                     <ConnectButton />
                   </div>

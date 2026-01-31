@@ -384,118 +384,40 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [suiClient]);
 
-  // Fetch AVAX transactions using viem publicClient - queries ERC20 Transfer events
+  // Fetch AVAX transactions using Snowtrace API (indexed, fast, full history)
   const fetchAvaxTransactions = useCallback(async (address: string): Promise<TransactionRecord[]> => {
     if (!address) return [];
 
     try {
-      const AVAX_RPC_URL = import.meta.env.VITE_AVAX_RPC_URL || 'https://api.avax-test.network/ext/bc/C/rpc';
+      // Use Snowtrace API for Fuji testnet - provides full indexed history
+      const apiUrl = `https://api-testnet.snowtrace.io/api?module=account&action=tokentx&contractaddress=${AVAX_USDC_CONTRACT}&address=${address}&page=1&offset=50&sort=desc`;
 
-      // ERC20 Transfer event signature
-      const transferEventSignature = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+      const res = await fetch(apiUrl);
+      const data = await res.json();
 
-      // Pad address to 32 bytes for topic filter
-      const paddedAddress = `0x000000000000000000000000${address.slice(2).toLowerCase()}`;
-
-      // Get latest block number
-      const latestBlockRes = await fetch(AVAX_RPC_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'eth_blockNumber',
-          params: [],
-          id: 1,
-        }),
-      });
-      const latestBlockData = await latestBlockRes.json();
-      const latestBlock = parseInt(latestBlockData.result, 16);
-
-      // Query last ~2000 blocks (about 1 hour on AVAX) to avoid RPC timeout/limits
-      const fromBlock = Math.max(0, latestBlock - 2000);
-
-      // Get sent transactions (from address)
-      const sentLogsRes = await fetch(AVAX_RPC_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'eth_getLogs',
-          params: [{
-            address: AVAX_USDC_CONTRACT,
-            topics: [transferEventSignature, paddedAddress, null],
-            fromBlock: `0x${fromBlock.toString(16)}`,
-            toBlock: 'latest',
-          }],
-          id: 2,
-        }),
-      });
-      const sentLogsData = await sentLogsRes.json();
-      if (sentLogsData.error) {
-        throw new Error(`Sent logs error: ${JSON.stringify(sentLogsData.error)}`);
+      if (data.status !== '1' || !data.result) {
+        console.warn('Snowtrace API returned no results:', data.message);
+        return [];
       }
 
-      // Get received transactions (to address)
-      const receivedLogsRes = await fetch(AVAX_RPC_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'eth_getLogs',
-          params: [{
-            address: AVAX_USDC_CONTRACT,
-            topics: [transferEventSignature, null, paddedAddress],
-            fromBlock: `0x${fromBlock.toString(16)}`,
-            toBlock: 'latest',
-          }],
-          id: 3,
-        }),
-      });
-      const receivedLogsData = await receivedLogsRes.json();
-      if (receivedLogsData.error) {
-        throw new Error(`Received logs error: ${JSON.stringify(receivedLogsData.error)}`);
-      }
+      const transactions: TransactionRecord[] = data.result.map((tx: any) => {
+        const isSent = tx.from.toLowerCase() === address.toLowerCase();
+        const amount = parseInt(tx.value) / Math.pow(10, parseInt(tx.tokenDecimal) || AVAX_USDC_DECIMALS);
+        const counterparty = isSent ? tx.to : tx.from;
 
-      const transactions: TransactionRecord[] = [];
-
-      // Process sent logs
-      const sentLogs = sentLogsData.result || [];
-      for (const log of sentLogs) {
-        const toAddress = '0x' + log.topics[2].slice(26);
-        const amount = parseInt(log.data, 16) / Math.pow(10, AVAX_USDC_DECIMALS);
-        const blockNumber = parseInt(log.blockNumber, 16);
-
-        transactions.push({
-          id: log.transactionHash + '_sent',
-          type: 'sent',
-          to: toAddress.slice(0, 6) + '...' + toAddress.slice(-4),
+        return {
+          id: tx.hash + (isSent ? '_sent' : '_received'),
+          type: isSent ? 'sent' : 'received',
+          ...(isSent
+            ? { to: counterparty.slice(0, 6) + '...' + counterparty.slice(-4) }
+            : { from: counterparty.slice(0, 6) + '...' + counterparty.slice(-4) }
+          ),
           amount,
-          timestamp: new Date(Date.now() - (latestBlock - blockNumber) * 2000), // Approximate timestamp
-          token: 'USDC',
-          digest: log.transactionHash,
-        });
-      }
-
-      // Process received logs
-      const receivedLogs = receivedLogsData.result || [];
-      for (const log of receivedLogs) {
-        const fromAddress = '0x' + log.topics[1].slice(26);
-        const amount = parseInt(log.data, 16) / Math.pow(10, AVAX_USDC_DECIMALS);
-        const blockNumber = parseInt(log.blockNumber, 16);
-
-        transactions.push({
-          id: log.transactionHash + '_received',
-          type: 'received',
-          from: fromAddress.slice(0, 6) + '...' + fromAddress.slice(-4),
-          amount,
-          timestamp: new Date(Date.now() - (latestBlock - blockNumber) * 2000), // Approximate timestamp
-          token: 'USDC',
-          digest: log.transactionHash,
-        });
-      }
-
-      // Sort by timestamp descending
-      transactions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+          timestamp: new Date(parseInt(tx.timeStamp) * 1000),
+          token: tx.tokenSymbol || 'USDC',
+          digest: tx.hash,
+        };
+      });
 
       return transactions.slice(0, 20);
     } catch (error) {
