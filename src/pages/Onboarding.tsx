@@ -34,8 +34,6 @@ const Onboarding = () => {
     }
   }, [existingUsername, isAuthenticated, navigate]);
 
-  // Native Input Event Listeners to bypass React Synthetic Events (fix for MetaMask WebView)
-
 
   if (!isAuthenticated || existingUsername) {
     return null;
@@ -141,53 +139,22 @@ const Onboarding = () => {
             <div>
               <div className="flex items-center w-full min-w-0">
                 <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
-                <div
-                  className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold border-b-2 border-border focus:outline-none focus:border-foreground transition-colors cursor-text"
-                  contentEditable
-                  inputMode="text"
-                  spellCheck="false"
-                  suppressContentEditableWarning
-                  onInput={(e) => {
-                    const target = e.currentTarget;
-                    const val = target.textContent || '';
-                    const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '');
-
-                    // Force clean text in DOM if it contains invalid chars (prevent cursor jump issues best effort)
-                    if (val !== clean) {
-                      // Note: modifying textContent moves cursor to start. 
-                      // For simple sanitization, we might just accept val and sanitize on submit, 
-                      // OR strictly sanitize here but it might be annoying.
-                      // Let's purely sync state for now and sanitize on submit to be safe with cursor.
-                    }
-
-                    setInputUsername(e.currentTarget.textContent || '');
-                    setError('');
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault(); // Prevent new line
-                      handleSubmit();
-                    }
-                  }}
-                  onBlur={(e) => {
-                    // Sanitize strictly on blur
-                    const val = e.currentTarget.textContent || '';
-                    const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '');
-                    if (val !== clean) {
-                      e.currentTarget.textContent = clean;
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = inputUsername;
+                    const val = window.prompt('Enter username (letters, numbers, _ only):', current);
+                    if (val !== null) {
+                      const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '');
                       setInputUsername(clean);
+                      setError('');
                     }
                   }}
-                  data-placeholder="username"
-                  style={{
-                    WebkitUserSelect: 'text',
-                    userSelect: 'text',
-                    emptyCells: 'show', // helper
-                    minHeight: '48px', // ensure tap target
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                />
+                  className={`flex-1 min-w-0 w-full py-3 bg-transparent text-left text-2xl font-bold border-b-2 transition-colors ${inputUsername ? 'text-foreground' : 'text-muted-foreground'
+                    } ${inputUsername ? 'border-foreground' : 'border-border'}`}
+                >
+                  {inputUsername || 'username'}
+                </button>
               </div>
               <p className="text-muted-foreground text-sm mt-2">
                 This is how people will find and pay you
@@ -201,58 +168,42 @@ const Onboarding = () => {
               {/* Email Input */}
               <div className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                <div
-                  className="flex-1 py-3 bg-transparent border-b border-border focus:outline-none focus:border-foreground transition-colors cursor-text"
-                  contentEditable
-                  inputMode="email"
-                  suppressContentEditableWarning
-                  onInput={(e) => {
-                    setEmail(e.currentTarget.textContent || '');
-                    setError('');
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = email;
+                    const val = window.prompt('Enter email address:', current);
+                    if (val !== null) {
+                      setEmail(val.trim());
+                      setError('');
                     }
                   }}
-                  data-placeholder="Email address"
-                  style={{
-                    WebkitUserSelect: 'text',
-                    userSelect: 'text',
-                    minHeight: '44px',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                />
+                  className={`flex-1 py-3 bg-transparent text-left border-b transition-colors ${email ? 'text-foreground' : 'text-muted-foreground'
+                    } ${email ? 'border-foreground' : 'border-border'}`}
+                >
+                  {email || 'Email address'}
+                </button>
               </div>
 
               {/* Referral Input */}
               <div className="flex items-center gap-3">
                 <Users className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                <div
-                  className="flex-1 py-3 bg-transparent border-b border-border focus:outline-none focus:border-foreground transition-colors cursor-text"
-                  contentEditable
-                  inputMode="text"
-                  spellCheck="false"
-                  suppressContentEditableWarning
-                  onInput={(e) => {
-                    setReferral(e.currentTarget.textContent || '');
-                    setError('');
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = referral;
+                    const val = window.prompt('Enter referral username:', current);
+                    if (val !== null) {
+                      const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                      setReferral(clean);
+                      setError('');
                     }
                   }}
-                  data-placeholder="Referral username (optional)"
-                  style={{
-                    WebkitUserSelect: 'text',
-                    userSelect: 'text',
-                    minHeight: '44px',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                />
+                  className={`flex-1 py-3 bg-transparent text-left border-b transition-colors ${referral ? 'text-foreground' : 'text-muted-foreground'
+                    } ${referral ? 'border-foreground' : 'border-border'}`}
+                >
+                  {referral || 'Referral username (optional)'}
+                </button>
               </div>
             </div>
 
