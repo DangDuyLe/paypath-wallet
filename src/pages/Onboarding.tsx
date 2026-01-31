@@ -19,7 +19,6 @@ const Onboarding = () => {
   const [referral, setReferral] = useState('');
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(false);
-  const [activeField, setActiveField] = useState<string | null>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const referralRef = useRef<HTMLInputElement>(null);
@@ -34,6 +33,43 @@ const Onboarding = () => {
       navigate('/dashboard');
     }
   }, [existingUsername, isAuthenticated, navigate]);
+
+  // Native Input Event Listeners to bypass React Synthetic Events (fix for MetaMask WebView)
+  useEffect(() => {
+    const handleInput = (setter: (val: string) => void, sanitizer?: (val: string) => string) => (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      let val = target.value;
+
+      if (sanitizer) {
+        const clean = sanitizer(val);
+        if (clean !== val) {
+          target.value = clean;
+          val = clean;
+        }
+      }
+
+      setter(val);
+      setError('');
+    };
+
+    const usernameEl = usernameRef.current;
+    const emailEl = emailRef.current;
+    const referralEl = referralRef.current;
+
+    const uInputHandler = handleInput(setInputUsername, (v) => v.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+    const eInputHandler = handleInput(setEmail);
+    const rInputHandler = handleInput(setReferral, (v) => v.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+
+    if (usernameEl) usernameEl.addEventListener('input', uInputHandler);
+    if (emailEl) emailEl.addEventListener('input', eInputHandler);
+    if (referralEl) referralEl.addEventListener('input', rInputHandler);
+
+    return () => {
+      if (usernameEl) usernameEl.removeEventListener('input', uInputHandler);
+      if (emailEl) emailEl.removeEventListener('input', eInputHandler);
+      if (referralEl) referralEl.removeEventListener('input', rInputHandler);
+    };
+  }, []);
 
   if (!isAuthenticated || existingUsername) {
     return null;
@@ -139,7 +175,6 @@ const Onboarding = () => {
             <div>
               <div className="flex items-center w-full min-w-0">
                 <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
-                {/* Hidden Real Input - Captures keystrokes, fixed position to avoid layout shift */}
                 <input
                   ref={usernameRef}
                   type="text"
@@ -148,37 +183,19 @@ const Onboarding = () => {
                   autoCorrect="off"
                   autoCapitalize="none"
                   spellCheck="false"
-                  value={inputUsername}
-                  onChange={(e) => {
-                    const clean = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
-                    setInputUsername(clean);
-                    setError('');
-                  }}
+                  defaultValue={inputUsername}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                  onFocus={() => setActiveField('username')}
-                  onBlur={() => setActiveField(null)}
-                  className="fixed top-0 left-0 w-full h-12 opacity-0 -z-0 pointer-events-none"
-                  style={{ transform: 'translateY(-1000px)' }}
-                  aria-hidden="true"
-                />
-
-                {/* Visible Fake Input - Displays value */}
-                <div
-                  onClick={() => {
-                    if (usernameRef.current) {
-                      usernameRef.current.style.transform = 'translateY(0)';
-                      usernameRef.current.style.pointerEvents = 'auto';
-                      usernameRef.current.focus();
-                    }
+                  placeholder="username"
+                  className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
+                  style={{
+                    WebkitAppearance: 'none',
+                    touchAction: 'manipulation',
+                    zIndex: 10,
+                    WebkitUserSelect: 'text',
+                    userSelect: 'text',
+                    opacity: 1,
                   }}
-                  className={`flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold border-b-2 transition-colors cursor-text ${inputUsername ? 'text-foreground' : 'text-muted-foreground'
-                    } ${activeField === 'username' ? 'border-foreground' : 'border-border'}`}
-                >
-                  {inputUsername || 'username'}
-                  {activeField === 'username' && (
-                    <span className="animate-pulse inline-block w-0.5 h-6 bg-primary align-middle ml-0.5" />
-                  )}
-                </div>
+                />
               </div>
               <p className="text-muted-foreground text-sm mt-2">
                 This is how people will find and pay you
@@ -197,34 +214,19 @@ const Onboarding = () => {
                   type="email"
                   inputMode="email"
                   autoComplete="off"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setError('');
+                  defaultValue={email}
+                  placeholder="Email address"
+                  className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+                  style={{
+                    WebkitAppearance: 'none',
+                    touchAction: 'manipulation',
+                    position: 'relative',
+                    zIndex: 10,
+                    WebkitUserSelect: 'text',
+                    userSelect: 'text',
+                    opacity: 1,
                   }}
-                  onFocus={() => setActiveField('email')}
-                  onBlur={() => setActiveField(null)}
-                  className="fixed top-0 left-0 w-full h-12 opacity-0 -z-0 pointer-events-none"
-                  style={{ transform: 'translateY(-1000px)' }}
-                  aria-hidden="true"
                 />
-
-                <div
-                  onClick={() => {
-                    if (emailRef.current) {
-                      emailRef.current.style.transform = 'translateY(0)';
-                      emailRef.current.style.pointerEvents = 'auto';
-                      emailRef.current.focus();
-                    }
-                  }}
-                  className={`flex-1 py-3 bg-transparent border-b transition-colors cursor-text ${email ? 'text-foreground' : 'text-muted-foreground'
-                    } ${activeField === 'email' ? 'border-foreground' : 'border-border'}`}
-                >
-                  {email || 'Email address'}
-                  {activeField === 'email' && (
-                    <span className="animate-pulse inline-block w-0.5 h-4 bg-primary align-middle ml-0.5" />
-                  )}
-                </div>
               </div>
 
               {/* Referral Input */}
@@ -237,34 +239,19 @@ const Onboarding = () => {
                   autoComplete="off"
                   autoCorrect="off"
                   autoCapitalize="none"
-                  value={referral}
-                  onChange={(e) => {
-                    setReferral(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
-                    setError('');
+                  defaultValue={referral}
+                  placeholder="Referral username (optional)"
+                  className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+                  style={{
+                    WebkitAppearance: 'none',
+                    touchAction: 'manipulation',
+                    position: 'relative',
+                    zIndex: 10,
+                    WebkitUserSelect: 'text',
+                    userSelect: 'text',
+                    opacity: 1,
                   }}
-                  onFocus={() => setActiveField('referral')}
-                  onBlur={() => setActiveField(null)}
-                  className="fixed top-0 left-0 w-full h-12 opacity-0 -z-0 pointer-events-none"
-                  style={{ transform: 'translateY(-1000px)' }}
-                  aria-hidden="true"
                 />
-
-                <div
-                  onClick={() => {
-                    if (referralRef.current) {
-                      referralRef.current.style.transform = 'translateY(0)';
-                      referralRef.current.style.pointerEvents = 'auto';
-                      referralRef.current.focus();
-                    }
-                  }}
-                  className={`flex-1 py-3 bg-transparent border-b transition-colors cursor-text ${referral ? 'text-foreground' : 'text-muted-foreground'
-                    } ${activeField === 'referral' ? 'border-foreground' : 'border-border'}`}
-                >
-                  {referral || 'Referral username (optional)'}
-                  {activeField === 'referral' && (
-                    <span className="animate-pulse inline-block w-0.5 h-4 bg-primary align-middle ml-0.5" />
-                  )}
-                </div>
               </div>
             </div>
 
