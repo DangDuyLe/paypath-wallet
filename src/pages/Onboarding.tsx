@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useWallet } from '@/context/WalletContext';
@@ -20,6 +20,11 @@ const Onboarding = () => {
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(false);
 
+  // Refs for uncontrolled inputs (MetaMask browser compatibility)
+  const usernameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const referralRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -36,7 +41,12 @@ const Onboarding = () => {
   }
 
   const handleSubmit = async () => {
-    const clean = inputUsername.replace('@', '').trim().toLowerCase();
+    // Read values from refs (uncontrolled inputs)
+    const rawUsername = usernameRef.current?.value || '';
+    const rawEmail = emailRef.current?.value || '';
+    const rawReferral = referralRef.current?.value || '';
+
+    const clean = rawUsername.replace('@', '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
 
     if (clean.length < 3) {
       setError('Username must be at least 3 characters');
@@ -48,7 +58,7 @@ const Onboarding = () => {
       return;
     }
 
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (rawEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -66,8 +76,8 @@ const Onboarding = () => {
 
       await postOnboarding({
         username: clean,
-        email: email || undefined,
-        referralUsername: referral || undefined,
+        email: rawEmail || undefined,
+        referralUsername: rawReferral || undefined,
       });
 
       // Use walletAddress from context (works for both Sui and EVM)
@@ -81,7 +91,7 @@ const Onboarding = () => {
         await postRegister({
           walletAddress: connectedAddress,
           username: clean,
-          email: email || undefined,
+          email: rawEmail || undefined,
         });
       } catch (err: unknown) {
         const e = err as { response?: { status?: number }; message?: string };
@@ -130,24 +140,24 @@ const Onboarding = () => {
 
         {/* Middle */}
         <div className="py-6 animate-slide-up w-full max-w-full overflow-hidden space-y-6">
-          {/* Username Input - Using native prompt for MetaMask browser compatibility */}
+          {/* Username Input - Uncontrolled input for MetaMask browser compatibility */}
           <div>
             <div className="flex items-center w-full min-w-0">
               <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const result = window.prompt('Enter your username (letters, numbers, underscores only):', inputUsername);
-                  if (result !== null) {
-                    const cleaned = result.toLowerCase().replace(/[^a-z0-9_]/g, '');
-                    setInputUsername(cleaned);
-                    setError('');
-                  }
-                }}
-                className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold text-left border-b-2 border-border focus:border-foreground transition-colors"
-              >
-                {inputUsername || <span className="text-muted-foreground">tap to enter username</span>}
-              </button>
+              <input
+                ref={usernameRef}
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                enterKeyHint="done"
+                defaultValue=""
+                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                placeholder="username"
+                className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
+              />
             </div>
             <p className="text-muted-foreground text-sm mt-2">
               This is how people will find and pay you
@@ -158,55 +168,33 @@ const Onboarding = () => {
           <div className="space-y-4 pt-4 border-t border-border">
             <p className="label-caps text-muted-foreground">Optional</p>
 
-            {/* Email Input */}
+            {/* Email Input - Uncontrolled */}
             <div className="flex items-center gap-3">
               <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0" />
               <input
+                ref={emailRef}
                 type="email"
                 inputMode="email"
                 autoComplete="off"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setError('');
-                }}
+                defaultValue=""
                 placeholder="Email address"
                 className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
-                style={{
-                  WebkitAppearance: 'none',
-                  touchAction: 'manipulation',
-                  position: 'relative',
-                  zIndex: 10,
-                  WebkitUserSelect: 'text',
-                  userSelect: 'text',
-                }}
               />
             </div>
 
-            {/* Referral Input */}
+            {/* Referral Input - Uncontrolled */}
             <div className="flex items-center gap-3">
               <Users className="w-5 h-5 text-muted-foreground flex-shrink-0" />
               <input
+                ref={referralRef}
                 type="text"
                 inputMode="text"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
-                value={referral}
-                onChange={(e) => {
-                  setReferral(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
-                  setError('');
-                }}
+                defaultValue=""
                 placeholder="Referral username (optional)"
                 className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
-                style={{
-                  WebkitAppearance: 'none',
-                  touchAction: 'manipulation',
-                  position: 'relative',
-                  zIndex: 10,
-                  WebkitUserSelect: 'text',
-                  userSelect: 'text',
-                }}
               />
             </div>
           </div>
