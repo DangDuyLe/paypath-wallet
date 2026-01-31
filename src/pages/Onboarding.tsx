@@ -130,45 +130,24 @@ const Onboarding = () => {
 
         {/* Middle */}
         <div className="py-6 animate-slide-up w-full max-w-full overflow-hidden space-y-6">
-          {/* Username Input - Using textarea for MetaMask browser compatibility */}
+          {/* Username Input - Using native prompt for MetaMask browser compatibility */}
           <div>
             <div className="flex items-center w-full min-w-0">
               <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
-              <textarea
-                inputMode="text"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                enterKeyHint="done"
-                rows={1}
-                value={inputUsername}
-                onChange={(e) => {
-                  // Remove newlines and sanitize input
-                  const cleaned = e.target.value.replace(/\n/g, '').toLowerCase().replace(/[^a-z0-9_]/g, '');
-                  setInputUsername(cleaned);
-                  setError('');
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleSubmit();
+              <button
+                type="button"
+                onClick={() => {
+                  const result = window.prompt('Enter your username (letters, numbers, underscores only):', inputUsername);
+                  if (result !== null) {
+                    const cleaned = result.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                    setInputUsername(cleaned);
+                    setError('');
                   }
                 }}
-                placeholder="username"
-                className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors resize-none overflow-hidden"
-                style={{
-                  WebkitAppearance: 'none',
-                  touchAction: 'manipulation',
-                  position: 'relative',
-                  zIndex: 10,
-                  WebkitUserSelect: 'text',
-                  userSelect: 'text',
-                  height: 'auto',
-                  minHeight: '48px',
-                  lineHeight: '1.5',
-                }}
-              />
+                className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold text-left border-b-2 border-border focus:border-foreground transition-colors"
+              >
+                {inputUsername || <span className="text-muted-foreground">tap to enter username</span>}
+              </button>
             </div>
             <p className="text-muted-foreground text-sm mt-2">
               This is how people will find and pay you
