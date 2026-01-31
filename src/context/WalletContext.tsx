@@ -186,7 +186,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const { connect: wagmiConnect, connectors } = useConnect();
 
   // Native AVAX balance
-  const { data: avaxNativeBalance } = useWagmiBalance({
+  const { data: avaxNativeBalance, refetch: refetchAvaxNativeBalance } = useWagmiBalance({
     address: wagmiAccount.address,
   });
 
@@ -434,21 +434,49 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (currentState.currentChain === 'AVAX' && wagmiAccount.address) {
       setState(prev => ({ ...prev, isLoadingBalance: true }));
       try {
-        await refetchAvaxBalance();
-        const balance = avaxUsdcBalanceRaw ? Number(avaxUsdcBalanceRaw) / Math.pow(10, AVAX_USDC_DECIMALS) : 0;
-        setState(prev => ({
-          ...prev,
-          usdcBalance: balance,
-          balanceVnd: balance * USDC_TO_VND_RATE,
-          isLoadingBalance: false,
-          coins: [{
+        // Refetch both USDC and native AVAX balances
+        const [usdcResult, nativeResult] = await Promise.all([
+          refetchAvaxBalance(),
+          refetchAvaxNativeBalance(),
+        ]);
+
+        const usdcBalance = usdcResult.data ? Number(usdcResult.data) / Math.pow(10, AVAX_USDC_DECIMALS) : 0;
+        const nativeAvax = nativeResult.data ? Number(nativeResult.data.value) / Math.pow(10, 18) : 0;
+
+        // Build coins array with USDC first, then AVAX native
+        const avaxCoins: CoinBalance[] = [];
+
+        // Always add USDC first (main token)
+        if (usdcBalance > 0) {
+          avaxCoins.push({
             coinType: 'AVAX_USDC',
-            totalBalance: balance,
+            totalBalance: usdcBalance,
             rawBalance: avaxUsdcBalanceRaw?.toString() || '0',
             symbol: 'USDC',
             decimals: AVAX_USDC_DECIMALS,
             iconUrl: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png',
-          }],
+          });
+        }
+
+        // Add native AVAX
+        if (nativeAvax > 0) {
+          avaxCoins.push({
+            coinType: 'AVAX_NATIVE',
+            totalBalance: nativeAvax,
+            rawBalance: avaxNativeBalance?.value.toString() || '0',
+            symbol: 'AVAX',
+            decimals: 18,
+            iconUrl: 'https://cryptologos.cc/logos/avalanche-avax-logo.png',
+          });
+        }
+
+        setState(prev => ({
+          ...prev,
+          usdcBalance,
+          suiBalance: nativeAvax, // Reuse suiBalance for native (for gas checks)
+          balanceVnd: usdcBalance * USDC_TO_VND_RATE,
+          isLoadingBalance: false,
+          coins: avaxCoins,
         }));
 
         // Fetch AVAX transactions

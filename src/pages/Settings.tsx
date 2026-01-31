@@ -117,6 +117,28 @@ const Settings = () => {
     return wallets;
   })();
 
+  // Create AVAX wallet display list - filter for avalanche chain wallets + connected MetaMask
+  const displayAvaxWallets = (() => {
+    // Filter wallets that could be AVAX (we'll show all onchain wallets in AVAX section when AVAX mode)
+    const avaxWallets = linkedWallets.filter(w => {
+      // Include if address looks like EVM (0x + 40 hex chars, not 64 like Sui)
+      return w.address.startsWith('0x') && w.address.length === 42;
+    });
+
+    const currentEvmAddress = wagmiAccount.address;
+    if (currentEvmAddress) {
+      const isCurrentInList = avaxWallets.some(w => w.address.toLowerCase() === currentEvmAddress.toLowerCase());
+      if (!isCurrentInList) {
+        avaxWallets.unshift({
+          walletId: 'evm-session',
+          address: currentEvmAddress,
+          label: 'MetaMask',
+        });
+      }
+    }
+    return avaxWallets;
+  })();
+
   // Auto-save session wallet if it's the only one
   useEffect(() => {
     const autoSave = async () => {
@@ -227,7 +249,7 @@ const Settings = () => {
     try {
       await addOnchainWallet({
         address: newWalletAddress,
-        chain: 'Sui',
+        chain: currentChain === 'AVAX' ? 'avalanche' : 'sui',
         label: newWalletName,
       });
       await refreshSettings();
@@ -458,8 +480,12 @@ const Settings = () => {
         return;
       }
 
-      // Check if it's a valid wallet address (0x + 64 hex chars)
-      if (trimmed.startsWith('0x') && /^0x[a-fA-F0-9]{64}$/.test(trimmed)) {
+      // Check if it's a valid wallet address
+      // EVM addresses: 0x + 40 hex chars, Sui: 0x + 64 hex chars
+      const isEvmAddress = /^0x[a-fA-F0-9]{40}$/.test(trimmed);
+      const isSuiAddress = /^0x[a-fA-F0-9]{64}$/.test(trimmed);
+
+      if (trimmed.startsWith('0x') && (isEvmAddress || isSuiAddress)) {
         setNewWalletAddress(trimmed);
         setIsParsing(false);
         return;
@@ -486,7 +512,7 @@ const Settings = () => {
       }
 
       // Unknown QR format
-      setParseError('Invalid QR. Please scan a valid Sui wallet address (0x...).');
+      setParseError('Invalid QR. Please scan a valid wallet address (0x...).');
     } catch (error) {
       console.error('Wallet QR parsing error:', error);
       setParseError('Failed to parse QR code. Please enter address manually.');
@@ -740,42 +766,157 @@ const Settings = () => {
             <p className="display-medium">@{apiUsername ?? username ?? ''}</p>
           </div>
 
-          {/* EVM Wallet (when AVAX mode is active) */}
-          {enableAvax && wagmiAccount.isConnected && (
+          {/* AVAX Wallets (when AVAX mode is active) */}
+          {enableAvax && (
             <div className="mb-6 animate-slide-up stagger-1">
-              <p className="section-title">Avalanche Wallet</p>
+              <p className="section-title">Avalanche Wallets</p>
               <div className="rounded-xl border border-border overflow-hidden">
-                <div className="row-item px-4">
-                  <div className="flex items-center gap-3">
-                    <Wallet className="w-5 h-5" />
-                    <div>
-                      <p className="font-medium">MetaMask</p>
-                      <p className="text-sm text-muted-foreground font-mono">
-                        {wagmiAccount.address?.slice(0, 8)}...{wagmiAccount.address?.slice(-4)}
-                      </p>
-                    </div>
+                {displayAvaxWallets.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    No wallets found
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        if (wagmiAccount.address) {
-                          navigator.clipboard.writeText(wagmiAccount.address);
-                          setCopiedEvmAddress(true);
-                          setTimeout(() => setCopiedEvmAddress(false), 2000);
-                        }
-                      }}
-                      className="p-2 hover:bg-secondary rounded-full transition-colors"
-                      title="Copy Address"
-                    >
-                      {copiedEvmAddress ? (
-                        <Check className="w-4 h-4 text-success" />
-                      ) : (
-                        <Copy className="w-4 h-4 text-muted-foreground" />
-                      )}
-                    </button>
-                    <span className="tag-success">Connected</span>
-                  </div>
-                </div>
+                ) : (
+                  displayAvaxWallets.map((wallet) => {
+                    const isActiveWallet = wagmiAccount.address?.toLowerCase() === wallet.address.toLowerCase();
+                    const isTemporary = wallet.walletId === 'evm-session';
+                    const isDefaultWallet = isDefault(wallet.walletId, 'wallet') ||
+                      (!isLoadingSettings && displayAvaxWallets.length === 1 && linkedBanks.length === 0 && !defaultAccountId);
+
+                    return (
+                      <div key={wallet.walletId} className="border-b border-border last:border-b-0">
+                        <div className="row-item px-4">
+                          <div className="flex items-center gap-3">
+                            <Wallet className="w-5 h-5" />
+                            <div>
+                              <p className="font-medium">{wallet.label || 'Wallet'}</p>
+                              <p className="text-sm text-muted-foreground font-mono">
+                                {wallet.address.slice(0, 8)}...{wallet.address.slice(-4)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(wallet.address);
+                                setCopiedWalletId(wallet.walletId);
+                                setTimeout(() => setCopiedWalletId(null), 2000);
+                              }}
+                              className="p-2 hover:bg-secondary rounded-full transition-colors"
+                              title="Copy Address"
+                            >
+                              {copiedWalletId === wallet.walletId ? (
+                                <Check className="w-4 h-4 text-success" />
+                              ) : (
+                                <Copy className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </button>
+                            <div className="h-4 w-px bg-border mx-1" />
+
+                            {isDefaultWallet ? (
+                              <span className="tag-success">Default</span>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  setIsLoadingSettings(true);
+                                  try {
+                                    let walletId = wallet.walletId;
+
+                                    // If it's a session wallet, add to backend first
+                                    if (isTemporary) {
+                                      try {
+                                        await addOnchainWallet({
+                                          address: wallet.address,
+                                          chain: 'avalanche',
+                                          label: wallet.label || 'MetaMask',
+                                          walletProvider: 'MetaMask',
+                                        });
+                                      } catch (e: any) {
+                                        if (e.response?.status !== 409) throw e;
+                                      }
+                                      // Refresh to get the wallet ID
+                                      const response = await listOnchainWallets();
+                                      const wallets = (response.data as any)?.wallets || response.data || [];
+                                      const found = wallets.find((w: any) =>
+                                        w.address.toLowerCase() === wallet.address.toLowerCase()
+                                      );
+                                      if (found) walletId = found.walletId;
+                                    }
+
+                                    await setDefaultPaymentMethod({
+                                      walletId,
+                                      walletType: 'onchain',
+                                    });
+                                    await refreshSettings();
+                                    refreshBalance(wallet.address);
+                                  } catch (e) {
+                                    console.error('Failed to set default', e);
+                                    toast.error('Failed to set wallet as default');
+                                  } finally {
+                                    setIsLoadingSettings(false);
+                                  }
+                                }}
+                                disabled={isLoadingSettings}
+                                className="text-xs font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full hover:bg-secondary transition-colors disabled:opacity-50"
+                              >
+                                Set Default
+                              </button>
+                            )}
+                            {!isActiveWallet && displayAvaxWallets.length > 1 && !isTemporary && (
+                              <button
+                                onClick={() => handleRemoveWallet(wallet.walletId)}
+                                className="p-2 hover:bg-destructive/10 transition-colors"
+                                title="Remove"
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Inline balance for default wallet */}
+                        {isDefaultWallet && defaultAccountType !== 'bank' && (
+                          <div className="px-4 pb-3 pt-1 bg-secondary/30">
+                            {isLoadingBalance ? (
+                              <p className="text-xs text-muted-foreground">Loading balance...</p>
+                            ) : coins.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">No coins</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {(showAllCoins ? coins : coins.slice(0, 3)).map((coin) => (
+                                  <div key={coin.coinType} className="flex items-center gap-1.5 bg-background rounded-full px-2 py-1 text-xs">
+                                    {coin.iconUrl ? (
+                                      <img src={coin.iconUrl} alt={coin.symbol} className="w-4 h-4 rounded-full" />
+                                    ) : (
+                                      <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">{coin.symbol[0]}</span>
+                                    )}
+                                    <span className="font-medium">
+                                      {coin.totalBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {coin.symbol}
+                                    </span>
+                                  </div>
+                                ))}
+                                {coins.length > 3 && (
+                                  <button
+                                    onClick={() => setShowAllCoins(!showAllCoins)}
+                                    className="text-xs text-muted-foreground hover:text-primary"
+                                  >
+                                    {showAllCoins ? 'Less' : `+${coins.length - 3} more`}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+                <button
+                  onClick={() => setView('add-wallet')}
+                  className="w-full py-4 text-center font-medium hover:bg-secondary transition-colors flex items-center justify-center gap-2"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Add Wallet
+                </button>
               </div>
             </div>
           )}
