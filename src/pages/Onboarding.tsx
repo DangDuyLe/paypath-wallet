@@ -150,6 +150,14 @@ const Onboarding = () => {
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                 placeholder="username"
                 className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
+                style={{
+                  WebkitAppearance: 'none',
+                  touchAction: 'manipulation',
+                  position: 'relative',
+                  zIndex: 10,
+                  WebkitUserSelect: 'text',
+                  userSelect: 'text',
+                }}
               />
             </div>
             <p className="text-muted-foreground text-sm mt-2">
@@ -166,6 +174,8 @@ const Onboarding = () => {
               <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0" />
               <input
                 type="email"
+                inputMode="email"
+                autoComplete="off"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
@@ -173,6 +183,14 @@ const Onboarding = () => {
                 }}
                 placeholder="Email address"
                 className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+                style={{
+                  WebkitAppearance: 'none',
+                  touchAction: 'manipulation',
+                  position: 'relative',
+                  zIndex: 10,
+                  WebkitUserSelect: 'text',
+                  userSelect: 'text',
+                }}
               />
             </div>
 
@@ -181,6 +199,10 @@ const Onboarding = () => {
               <Users className="w-5 h-5 text-muted-foreground flex-shrink-0" />
               <input
                 type="text"
+                inputMode="text"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
                 value={referral}
                 onChange={(e) => {
                   setReferral(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
@@ -188,6 +210,14 @@ const Onboarding = () => {
                 }}
                 placeholder="Referral username (optional)"
                 className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+                style={{
+                  WebkitAppearance: 'none',
+                  touchAction: 'manipulation',
+                  position: 'relative',
+                  zIndex: 10,
+                  WebkitUserSelect: 'text',
+                  userSelect: 'text',
+                }}
               />
             </div>
           </div>
