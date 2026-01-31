@@ -486,3 +486,10 @@
     transform: translateY(0);
   }
 }
+/* ContentEditable Placeholder */
+[contenteditable]:empty:before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  display: block;
+}

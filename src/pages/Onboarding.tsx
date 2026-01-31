@@ -35,41 +35,7 @@ const Onboarding = () => {
   }, [existingUsername, isAuthenticated, navigate]);
 
   // Native Input Event Listeners to bypass React Synthetic Events (fix for MetaMask WebView)
-  useEffect(() => {
-    const handleInput = (setter: (val: string) => void, sanitizer?: (val: string) => string) => (e: Event) => {
-      const target = e.target as HTMLInputElement;
-      let val = target.value;
 
-      if (sanitizer) {
-        const clean = sanitizer(val);
-        if (clean !== val) {
-          target.value = clean;
-          val = clean;
-        }
-      }
-
-      setter(val);
-      setError('');
-    };
-
-    const usernameEl = usernameRef.current;
-    const emailEl = emailRef.current;
-    const referralEl = referralRef.current;
-
-    const uInputHandler = handleInput(setInputUsername, (v) => v.toLowerCase().replace(/[^a-z0-9_]/g, ''));
-    const eInputHandler = handleInput(setEmail);
-    const rInputHandler = handleInput(setReferral, (v) => v.toLowerCase().replace(/[^a-z0-9_]/g, ''));
-
-    if (usernameEl) usernameEl.addEventListener('input', uInputHandler);
-    if (emailEl) emailEl.addEventListener('input', eInputHandler);
-    if (referralEl) referralEl.addEventListener('input', rInputHandler);
-
-    return () => {
-      if (usernameEl) usernameEl.removeEventListener('input', uInputHandler);
-      if (emailEl) emailEl.removeEventListener('input', eInputHandler);
-      if (referralEl) referralEl.removeEventListener('input', rInputHandler);
-    };
-  }, []);
 
   if (!isAuthenticated || existingUsername) {
     return null;
@@ -175,25 +141,51 @@ const Onboarding = () => {
             <div>
               <div className="flex items-center w-full min-w-0">
                 <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
-                <input
-                  ref={usernameRef}
-                  type="text"
+                <div
+                  className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold border-b-2 border-border focus:outline-none focus:border-foreground transition-colors cursor-text"
+                  contentEditable
                   inputMode="text"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="none"
                   spellCheck="false"
-                  defaultValue={inputUsername}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                  placeholder="username"
-                  className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
+                  suppressContentEditableWarning
+                  onInput={(e) => {
+                    const target = e.currentTarget;
+                    const val = target.textContent || '';
+                    const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+                    // Force clean text in DOM if it contains invalid chars (prevent cursor jump issues best effort)
+                    if (val !== clean) {
+                      // Note: modifying textContent moves cursor to start. 
+                      // For simple sanitization, we might just accept val and sanitize on submit, 
+                      // OR strictly sanitize here but it might be annoying.
+                      // Let's purely sync state for now and sanitize on submit to be safe with cursor.
+                    }
+
+                    setInputUsername(e.currentTarget.textContent || '');
+                    setError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault(); // Prevent new line
+                      handleSubmit();
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Sanitize strictly on blur
+                    const val = e.currentTarget.textContent || '';
+                    const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                    if (val !== clean) {
+                      e.currentTarget.textContent = clean;
+                      setInputUsername(clean);
+                    }
+                  }}
+                  data-placeholder="username"
                   style={{
-                    WebkitAppearance: 'none',
-                    touchAction: 'manipulation',
-                    zIndex: 10,
                     WebkitUserSelect: 'text',
                     userSelect: 'text',
-                    opacity: 1,
+                    emptyCells: 'show', // helper
+                    minHeight: '48px', // ensure tap target
+                    display: 'flex',
+                    alignItems: 'center',
                   }}
                 />
               </div>
@@ -209,22 +201,27 @@ const Onboarding = () => {
               {/* Email Input */}
               <div className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                <input
-                  ref={emailRef}
-                  type="email"
+                <div
+                  className="flex-1 py-3 bg-transparent border-b border-border focus:outline-none focus:border-foreground transition-colors cursor-text"
+                  contentEditable
                   inputMode="email"
-                  autoComplete="off"
-                  defaultValue={email}
-                  placeholder="Email address"
-                  className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+                  suppressContentEditableWarning
+                  onInput={(e) => {
+                    setEmail(e.currentTarget.textContent || '');
+                    setError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                    }
+                  }}
+                  data-placeholder="Email address"
                   style={{
-                    WebkitAppearance: 'none',
-                    touchAction: 'manipulation',
-                    position: 'relative',
-                    zIndex: 10,
                     WebkitUserSelect: 'text',
                     userSelect: 'text',
-                    opacity: 1,
+                    minHeight: '44px',
+                    display: 'flex',
+                    alignItems: 'center',
                   }}
                 />
               </div>
@@ -232,24 +229,28 @@ const Onboarding = () => {
               {/* Referral Input */}
               <div className="flex items-center gap-3">
                 <Users className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                <input
-                  ref={referralRef}
-                  type="text"
+                <div
+                  className="flex-1 py-3 bg-transparent border-b border-border focus:outline-none focus:border-foreground transition-colors cursor-text"
+                  contentEditable
                   inputMode="text"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="none"
-                  defaultValue={referral}
-                  placeholder="Referral username (optional)"
-                  className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+                  spellCheck="false"
+                  suppressContentEditableWarning
+                  onInput={(e) => {
+                    setReferral(e.currentTarget.textContent || '');
+                    setError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                    }
+                  }}
+                  data-placeholder="Referral username (optional)"
                   style={{
-                    WebkitAppearance: 'none',
-                    touchAction: 'manipulation',
-                    position: 'relative',
-                    zIndex: 10,
                     WebkitUserSelect: 'text',
                     userSelect: 'text',
-                    opacity: 1,
+                    minHeight: '44px',
+                    display: 'flex',
+                    alignItems: 'center',
                   }}
                 />
               </div>
