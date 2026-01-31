@@ -19,6 +19,7 @@ const Onboarding = () => {
   const [referral, setReferral] = useState('');
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(false);
+  const usernameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -140,12 +141,13 @@ const Onboarding = () => {
                   inputMode="text"
                   autoComplete="off"
                   autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  enterKeyHint="done"
-                  value={inputUsername}
+                  autoCapitalize="none"
+                  spellCheck="false"
+                  ref={usernameRef}
+                  defaultValue={inputUsername}
                   onChange={(e) => {
-                    setInputUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                    // Update state purely for button disabled check, DO NOT manipulating DOM value here
+                    setInputUsername(e.target.value);
                     setError('');
                   }}
                   onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
@@ -157,6 +159,8 @@ const Onboarding = () => {
                     zIndex: 10,
                     WebkitUserSelect: 'text',
                     userSelect: 'text',
+                    opacity: 1, // Ensure visibility
+                    color: 'inherit',
                   }}
                 />
               </div>
@@ -176,7 +180,7 @@ const Onboarding = () => {
                   type="email"
                   inputMode="email"
                   autoComplete="off"
-                  value={email}
+                  defaultValue={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
                     setError('');
@@ -190,6 +194,8 @@ const Onboarding = () => {
                     zIndex: 10,
                     WebkitUserSelect: 'text',
                     userSelect: 'text',
+                    opacity: 1,
+                    color: 'inherit',
                   }}
                 />
               </div>
@@ -202,10 +208,10 @@ const Onboarding = () => {
                   inputMode="text"
                   autoComplete="off"
                   autoCorrect="off"
-                  autoCapitalize="off"
-                  value={referral}
+                  autoCapitalize="none"
+                  defaultValue={referral}
                   onChange={(e) => {
-                    setReferral(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                    setReferral(e.target.value);
                     setError('');
                   }}
                   placeholder="Referral username (optional)"
@@ -217,6 +223,8 @@ const Onboarding = () => {
                     zIndex: 10,
                     WebkitUserSelect: 'text',
                     userSelect: 'text',
+                    opacity: 1,
+                    color: 'inherit',
                   }}
                 />
               </div>
