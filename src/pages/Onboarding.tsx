@@ -20,11 +20,6 @@ const Onboarding = () => {
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(false);
 
-  // Refs for uncontrolled inputs (MetaMask browser compatibility)
-  const usernameRef = useRef<HTMLInputElement>(null);
-  const emailRef = useRef<HTMLInputElement>(null);
-  const referralRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -41,12 +36,7 @@ const Onboarding = () => {
   }
 
   const handleSubmit = async () => {
-    // Read values from refs (uncontrolled inputs)
-    const rawUsername = usernameRef.current?.value || '';
-    const rawEmail = emailRef.current?.value || '';
-    const rawReferral = referralRef.current?.value || '';
-
-    const clean = rawUsername.replace('@', '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const clean = inputUsername.replace('@', '').trim().toLowerCase();
 
     if (clean.length < 3) {
       setError('Username must be at least 3 characters');
@@ -58,7 +48,7 @@ const Onboarding = () => {
       return;
     }
 
-    if (rawEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -76,8 +66,8 @@ const Onboarding = () => {
 
       await postOnboarding({
         username: clean,
-        email: rawEmail || undefined,
-        referralUsername: rawReferral || undefined,
+        email: email || undefined,
+        referralUsername: referral || undefined,
       });
 
       // Use walletAddress from context (works for both Sui and EVM)
@@ -91,7 +81,7 @@ const Onboarding = () => {
         await postRegister({
           walletAddress: connectedAddress,
           username: clean,
-          email: rawEmail || undefined,
+          email: email || undefined,
         });
       } catch (err: unknown) {
         const e = err as { response?: { status?: number }; message?: string };
@@ -139,13 +129,12 @@ const Onboarding = () => {
         </div>
 
         {/* Middle */}
-        <div className="py-6 animate-slide-up w-full max-w-full overflow-hidden space-y-6">
-          {/* Username Input - Uncontrolled input for MetaMask browser compatibility */}
+        <div className="py-6 animate-slide-up w-full max-w-full space-y-6">
+          {/* Username Input - Uncontrolled for MetaMask compatibility */}
           <div>
             <div className="flex items-center w-full min-w-0">
               <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
               <input
-                ref={usernameRef}
                 type="text"
                 inputMode="text"
                 autoComplete="off"
@@ -153,10 +142,27 @@ const Onboarding = () => {
                 autoCapitalize="off"
                 spellCheck={false}
                 enterKeyHint="done"
-                defaultValue=""
+                defaultValue={inputUsername}
+                onChange={(e) => {
+                  // Direct DOM sanitation prevents cursor jumps and state sync issues
+                  const val = e.target.value;
+                  const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                  if (val !== clean) {
+                    e.target.value = clean;
+                  }
+                  setInputUsername(clean);
+                  setError('');
+                }}
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                 placeholder="username"
                 className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
+                style={{
+                  WebkitAppearance: 'none',
+                  touchAction: 'manipulation',
+                  zIndex: 10,
+                  WebkitUserSelect: 'text',
+                  userSelect: 'text',
+                }}
               />
             </div>
             <p className="text-muted-foreground text-sm mt-2">
@@ -168,33 +174,55 @@ const Onboarding = () => {
           <div className="space-y-4 pt-4 border-t border-border">
             <p className="label-caps text-muted-foreground">Optional</p>
 
-            {/* Email Input - Uncontrolled */}
+            {/* Email Input */}
             <div className="flex items-center gap-3">
               <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0" />
               <input
-                ref={emailRef}
                 type="email"
                 inputMode="email"
                 autoComplete="off"
-                defaultValue=""
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError('');
+                }}
                 placeholder="Email address"
                 className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+                style={{
+                  WebkitAppearance: 'none',
+                  touchAction: 'manipulation',
+                  position: 'relative',
+                  zIndex: 10,
+                  WebkitUserSelect: 'text',
+                  userSelect: 'text',
+                }}
               />
             </div>
 
-            {/* Referral Input - Uncontrolled */}
+            {/* Referral Input */}
             <div className="flex items-center gap-3">
               <Users className="w-5 h-5 text-muted-foreground flex-shrink-0" />
               <input
-                ref={referralRef}
                 type="text"
                 inputMode="text"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
-                defaultValue=""
+                value={referral}
+                onChange={(e) => {
+                  setReferral(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                  setError('');
+                }}
                 placeholder="Referral username (optional)"
                 className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+                style={{
+                  WebkitAppearance: 'none',
+                  touchAction: 'manipulation',
+                  position: 'relative',
+                  zIndex: 10,
+                  WebkitUserSelect: 'text',
+                  userSelect: 'text',
+                }}
               />
             </div>
           </div>
