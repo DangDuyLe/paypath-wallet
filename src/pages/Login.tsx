@@ -6,6 +6,7 @@ import { useAccount as useWagmiAccount, useConnect, useDisconnect } from 'wagmi'
 import { useEffect, useState } from 'react';
 import { Copy, Check, LogOut, Wallet, ChevronRight } from 'lucide-react';
 import ChainSelectorModal from '@/components/ChainSelectorModal';
+import WalletSelectorModal from '@/components/WalletSelectorModal';
 
 const isMobileDevice = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -33,6 +34,7 @@ const Login = () => {
   const [copied, setCopied] = useState(false);
   const [showWalletOptions, setShowWalletOptions] = useState(false);
   const [showChainSelector, setShowChainSelector] = useState(false);
+  const [showWalletSelector, setShowWalletSelector] = useState(false);
   const { loginWithWallet, isAuthLoading } = useAuth();
   const [, setAuthError] = useState<string | null>(null);
 
@@ -92,13 +94,10 @@ const Login = () => {
       return;
     }
 
-    // If only AVAX enabled, connect directly
+    // If only AVAX enabled, show wallet selector instead of auto-injected
     if (enableAvax && !enableSui) {
-      const injectedConnector = connectors.find(c => c.id === 'injected' || c.id === 'metaMask');
-      if (injectedConnector) {
-        setCurrentChain('AVAX');
-        connectAvax({ connector: injectedConnector });
-      }
+      setCurrentChain('AVAX');
+      setShowWalletSelector(true);
       return;
     }
 
@@ -106,8 +105,11 @@ const Login = () => {
     setHasClickedConnect(true);
   };
 
-  const handleChainSelected = () => {
+  const handleChainSelected = (chain?: 'SUI' | 'AVAX') => {
     setHasClickedConnect(true);
+    if (chain === 'AVAX') {
+      setShowWalletSelector(true);
+    }
   };
 
   const handleAuthLogin = async () => {
@@ -344,11 +346,15 @@ const Login = () => {
         </div>
       </div>
 
-      {/* Chain Selector Modal */}
       <ChainSelectorModal
         open={showChainSelector}
         onOpenChange={setShowChainSelector}
         onChainSelected={handleChainSelected}
+      />
+
+      <WalletSelectorModal
+        open={showWalletSelector}
+        onOpenChange={setShowWalletSelector}
       />
     </div>
   );

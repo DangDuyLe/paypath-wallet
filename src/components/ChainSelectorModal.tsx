@@ -15,7 +15,7 @@ import {
 interface ChainSelectorModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onChainSelected?: () => void;
+    onChainSelected?: (chain: 'SUI' | 'AVAX') => void;
 }
 
 export function ChainSelectorModal({ open, onOpenChange, onChainSelected }: ChainSelectorModalProps) {
@@ -26,19 +26,16 @@ export function ChainSelectorModal({ open, onOpenChange, onChainSelected }: Chai
     const handleSuiConnect = () => {
         setCurrentChain('SUI');
         onOpenChange(false);
+        onOpenChange(false);
         // Sui wallet modal will be triggered by the dapp-kit ConnectModal
-        onChainSelected?.();
+        onChainSelected?.('SUI');
     };
 
     const handleAvaxConnect = () => {
         setCurrentChain('AVAX');
-        // Find MetaMask or injected connector
-        const injectedConnector = connectors.find(c => c.id === 'injected' || c.id === 'metaMask');
-        if (injectedConnector) {
-            connectAvax({ connector: injectedConnector });
-        }
         onOpenChange(false);
-        onChainSelected?.();
+        // Delegate to parent to show Wallet Selector (or auto-handle if needed)
+        onChainSelected?.('AVAX');
     };
 
     // If only one chain is enabled, auto-select

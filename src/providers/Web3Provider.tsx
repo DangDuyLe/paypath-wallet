@@ -12,7 +12,7 @@ const ENABLE_SUI = import.meta.env.VITE_ENABLE_SUI !== '0';
 const ENABLE_AVAX = import.meta.env.VITE_ENABLE_AVAX === '1';
 const AVAX_CHAIN_ID = parseInt(import.meta.env.VITE_AVAX_CHAIN_ID || '43113', 10);
 const AVAX_RPC_URL = import.meta.env.VITE_AVAX_RPC_URL || 'https://api.avax-test.network/ext/bc/C/rpc';
-const WALLET_CONNECT_PROJECT_ID = import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID || '';
+const WALLETCONNECT_PROJECT_ID = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
 
 // Sui network config
 const { networkConfig } = createNetworkConfig({
@@ -32,7 +32,16 @@ const wagmiConfig = createConfig({
     chains: [avaxChain],
     connectors: ENABLE_AVAX ? [
         injected(),
-        ...(WALLET_CONNECT_PROJECT_ID ? [walletConnect({ projectId: WALLET_CONNECT_PROJECT_ID })] : []),
+        ...(WALLETCONNECT_PROJECT_ID ? [walletConnect({
+            projectId: WALLETCONNECT_PROJECT_ID,
+            showQrModal: true,
+            metadata: {
+                name: 'HiddenPay',
+                description: 'HiddenPay DApp',
+                url: 'https://hiddenpay.app',
+                icons: ['https://avatars.githubusercontent.com/u/37784886']
+            }
+        })] : []),
     ] : [],
     transports: {
         [avalancheFuji.id]: http(AVAX_RPC_URL),
