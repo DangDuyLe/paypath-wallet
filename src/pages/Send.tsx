@@ -284,8 +284,8 @@ const Send = () => {
     }
   };
 
-  const checkRecipient = async () => {
-    const input = recipient.trim();
+  const checkRecipient = async (manualValue?: any) => {
+    const input = (typeof manualValue === 'string' ? manualValue : recipient).trim(); // Support manual check or state fallback
     if (!input || input.length < 2) return;
 
     setIsChecking(true);
@@ -1127,18 +1127,20 @@ const Send = () => {
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={recipient}
-                      onChange={(e) => {
-                        setRecipient(e.target.value);
-                        setRecipientValid(null);
-                        setError('');
+                    <button
+                      onClick={() => {
+                        const val = window.prompt('Enter Recipient (@username or 0x...):', recipient);
+                        if (val !== null) {
+                          setRecipient(val);
+                          setRecipientValid(null);
+                          setError('');
+                          checkRecipient(val);
+                        }
                       }}
-                      onBlur={checkRecipient}
-                      placeholder="@username or 0x..."
-                      className="input-modern pl-10"
-                    />
+                      className={`input-modern pl-10 text-left ${!recipient ? 'text-muted-foreground' : ''}`}
+                    >
+                      {recipient || '@username or 0x...'}
+                    </button>
                   </div>
                   {recipientValid === true && (
                     <div className="w-11 h-11 rounded-xl bg-success/10 flex items-center justify-center">
@@ -1161,56 +1163,60 @@ const Send = () => {
 
               {/* VND Input */}
               <div className="relative">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={amountVnd ? Number(amountVnd.replace(/,/g, '')).toLocaleString('en-US') : ''}
-                  onChange={(e) => {
-                    // Remove non-numeric chars except comma
-                    const raw = e.target.value.replace(/[^0-9]/g, '');
-                    if (raw === '') {
-                      setAmountVnd('');
-                      setAmount('');
-                      setAmountSource(null);
-                    } else {
-                      const vndNum = parseInt(raw, 10);
-                      setAmountVnd(raw);
-                      // Convert to USD
-                      const usdNum = vndNum / exchangeRate;
-                      setAmount(usdNum.toFixed(2));
-                      setAmountSource('vnd');
+                <button
+                  onClick={() => {
+                    const current = amountVnd || '';
+                    const val = window.prompt('Enter amount in VND:', current);
+
+                    if (val !== null) {
+                      const raw = val.replace(/[^0-9]/g, '');
+                      if (raw === '') {
+                        setAmountVnd('');
+                        setAmount('');
+                        setAmountSource(null);
+                      } else {
+                        const vndNum = parseInt(raw, 10);
+                        setAmountVnd(raw);
+                        // Convert to USD
+                        const usdNum = vndNum / exchangeRate;
+                        setAmount(usdNum.toFixed(2));
+                        setAmountSource('vnd');
+                      }
+                      setError('');
                     }
-                    setError('');
                   }}
-                  placeholder="0"
-                  className="input-modern text-lg font-semibold pr-12"
-                />
+                  className={`input-modern text-lg font-semibold pr-12 text-left ${!amountVnd ? 'text-muted-foreground' : ''}`}
+                >
+                  {amountVnd ? Number(amountVnd.replace(/,/g, '')).toLocaleString('en-US') : '0'}
+                </button>
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">₫</span>
               </div>
 
               {/* USD Input */}
               <div className="relative">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    // Allow decimal numbers
-                    if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                      setAmount(value);
-                      // Convert to VND
-                      const usdNum = parseFloat(value) || 0;
-                      const vndNum = Math.round(usdNum * exchangeRate);
-                      setAmountVnd(vndNum > 0 ? vndNum.toString() : '');
-                      setAmountSource('usd');
+                <button
+                  onClick={() => {
+                    const current = amount;
+                    const val = window.prompt('Enter amount in USD:', current);
+
+                    if (val !== null) {
+                      const value = val;
+                      // Allow decimal numbers
+                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                        setAmount(value);
+                        // Convert to VND
+                        const usdNum = parseFloat(value) || 0;
+                        const vndNum = Math.round(usdNum * exchangeRate);
+                        setAmountVnd(vndNum > 0 ? vndNum.toString() : '');
+                        setAmountSource('usd');
+                      }
+                      setError('');
                     }
-                    setError('');
                   }}
-                  step="0.01"
-                  placeholder="0.00"
-                  className="input-modern text-lg font-semibold pr-16"
-                />
+                  className={`input-modern text-lg font-semibold pr-16 text-left ${!amount ? 'text-muted-foreground' : ''}`}
+                >
+                  {amount || '0.00'}
+                </button>
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">USDC</span>
               </div>
             </div>

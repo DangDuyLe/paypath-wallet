@@ -583,23 +583,30 @@ const Settings = () => {
               <div className="rounded-xl border border-border p-4 space-y-4">
                 <div>
                   <label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Wallet Name</label>
-                  <input
-                    type="text"
-                    value={newWalletName}
-                    onChange={(e) => setNewWalletName(e.target.value)}
-                    placeholder="e.g. Trading Wallet"
-                    className="input-modern w-full"
-                  />
+                  <button
+                    onClick={() => {
+                      const val = window.prompt('Enter Wallet Name:', newWalletName);
+                      if (val !== null) setNewWalletName(val);
+                    }}
+                    className={`input-modern w-full text-left ${!newWalletName ? 'text-muted-foreground' : ''}`}
+                  >
+                    {newWalletName || 'e.g. Trading Wallet'}
+                  </button>
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Wallet Address</label>
-                  <input
-                    type="text"
-                    value={newWalletAddress}
-                    onChange={(e) => { setNewWalletAddress(e.target.value); setParseError(''); }}
-                    placeholder="0x..."
-                    className="input-modern w-full font-mono text-sm"
-                  />
+                  <button
+                    onClick={() => {
+                      const val = window.prompt('Enter Wallet Address:', newWalletAddress);
+                      if (val !== null) {
+                        setNewWalletAddress(val);
+                        setParseError('');
+                      }
+                    }}
+                    className={`input-modern w-full font-mono text-sm text-left ${!newWalletAddress ? 'text-muted-foreground' : ''}`}
+                  >
+                    {newWalletAddress || '0x...'}
+                  </button>
                 </div>
               </div>
             </div>
