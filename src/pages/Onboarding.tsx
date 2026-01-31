@@ -121,119 +121,115 @@ const Onboarding = () => {
 
   return (
     <div className="app-container">
-      <div className="page-wrapper justify-between">
-        {/* Top */}
-        <div className="pt-12 animate-fade-in">
-          <p className="label-caps mb-4">Almost there</p>
-          <h1 className="display-medium">Choose your<br />username</h1>
-        </div>
-
-        {/* Middle */}
-        <div className="py-6 animate-slide-up w-full max-w-full space-y-6">
-          {/* Username Input - Uncontrolled for MetaMask compatibility */}
-          <div>
-            <div className="flex items-center w-full min-w-0">
-              <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
-              <input
-                type="text"
-                inputMode="text"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                enterKeyHint="done"
-                defaultValue={inputUsername}
-                onChange={(e) => {
-                  // Direct DOM sanitation prevents cursor jumps and state sync issues
-                  const val = e.target.value;
-                  const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '');
-                  if (val !== clean) {
-                    e.target.value = clean;
-                  }
-                  setInputUsername(clean);
-                  setError('');
-                }}
-                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                placeholder="username"
-                className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
-                style={{
-                  WebkitAppearance: 'none',
-                  touchAction: 'manipulation',
-                  zIndex: 10,
-                  WebkitUserSelect: 'text',
-                  userSelect: 'text',
-                }}
-              />
-            </div>
-            <p className="text-muted-foreground text-sm mt-2">
-              This is how people will find and pay you
-            </p>
+      <div className="page-wrapper">
+        <div className="flex-1 flex flex-col justify-start">
+          {/* Top */}
+          <div className="pt-12 animate-fade-in flex-shrink-0">
+            <p className="label-caps mb-4">Almost there</p>
+            <h1 className="display-medium">Choose your<br />username</h1>
           </div>
 
-          {/* Optional Fields */}
-          <div className="space-y-4 pt-4 border-t border-border">
-            <p className="label-caps text-muted-foreground">Optional</p>
-
-            {/* Email Input */}
-            <div className="flex items-center gap-3">
-              <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-              <input
-                type="email"
-                inputMode="email"
-                autoComplete="off"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setError('');
-                }}
-                placeholder="Email address"
-                className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
-                style={{
-                  WebkitAppearance: 'none',
-                  touchAction: 'manipulation',
-                  position: 'relative',
-                  zIndex: 10,
-                  WebkitUserSelect: 'text',
-                  userSelect: 'text',
-                }}
-              />
+          {/* Middle */}
+          <div className="py-6 animate-slide-up w-full max-w-full space-y-6">
+            {/* Username Input */}
+            <div>
+              <div className="flex items-center w-full min-w-0">
+                <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
+                <input
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  enterKeyHint="done"
+                  value={inputUsername}
+                  onChange={(e) => {
+                    setInputUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                    setError('');
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                  placeholder="username"
+                  className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
+                  style={{
+                    WebkitAppearance: 'none',
+                    touchAction: 'manipulation',
+                    zIndex: 10,
+                    WebkitUserSelect: 'text',
+                    userSelect: 'text',
+                  }}
+                />
+              </div>
+              <p className="text-muted-foreground text-sm mt-2">
+                This is how people will find and pay you
+              </p>
             </div>
 
-            {/* Referral Input */}
-            <div className="flex items-center gap-3">
-              <Users className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-              <input
-                type="text"
-                inputMode="text"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                value={referral}
-                onChange={(e) => {
-                  setReferral(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
-                  setError('');
-                }}
-                placeholder="Referral username (optional)"
-                className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
-                style={{
-                  WebkitAppearance: 'none',
-                  touchAction: 'manipulation',
-                  position: 'relative',
-                  zIndex: 10,
-                  WebkitUserSelect: 'text',
-                  userSelect: 'text',
-                }}
-              />
+            {/* Optional Fields */}
+            <div className="space-y-4 pt-4 border-t border-border">
+              <p className="label-caps text-muted-foreground">Optional</p>
+
+              {/* Email Input */}
+              <div className="flex items-center gap-3">
+                <Mail className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="off"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setError('');
+                  }}
+                  placeholder="Email address"
+                  className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+                  style={{
+                    WebkitAppearance: 'none',
+                    touchAction: 'manipulation',
+                    position: 'relative',
+                    zIndex: 10,
+                    WebkitUserSelect: 'text',
+                    userSelect: 'text',
+                  }}
+                />
+              </div>
+
+              {/* Referral Input */}
+              <div className="flex items-center gap-3">
+                <Users className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                <input
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  value={referral}
+                  onChange={(e) => {
+                    setReferral(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                    setError('');
+                  }}
+                  placeholder="Referral username (optional)"
+                  className="flex-1 py-3 bg-transparent placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground transition-colors"
+                  style={{
+                    WebkitAppearance: 'none',
+                    touchAction: 'manipulation',
+                    position: 'relative',
+                    zIndex: 10,
+                    WebkitUserSelect: 'text',
+                    userSelect: 'text',
+                  }}
+                />
+              </div>
             </div>
+
+            {error && (
+              <p className="text-destructive">{error}</p>
+            )}
           </div>
-
-          {error && (
-            <p className="text-destructive">{error}</p>
-          )}
         </div>
 
         {/* Bottom */}
-        <div className="pb-8 animate-slide-up stagger-1">
+        <div className="pb-8 animate-slide-up stagger-1 flex-shrink-0">
           <button
             onClick={handleSubmit}
             disabled={!inputUsername || isChecking}
