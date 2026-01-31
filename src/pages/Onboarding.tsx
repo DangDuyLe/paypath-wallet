@@ -136,6 +136,12 @@ const Onboarding = () => {
               <span className="text-2xl font-bold mr-2 flex-shrink-0">@</span>
               <input
                 type="text"
+                inputMode="text"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                enterKeyHint="done"
                 value={inputUsername}
                 onChange={(e) => {
                   setInputUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
@@ -144,7 +150,6 @@ const Onboarding = () => {
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                 placeholder="username"
                 className="flex-1 min-w-0 w-full py-3 bg-transparent text-2xl font-bold placeholder:text-muted-foreground focus:outline-none border-b-2 border-border focus:border-foreground transition-colors"
-                autoFocus
               />
             </div>
             <p className="text-muted-foreground text-sm mt-2">
