@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 import { useState, useEffect } from 'react';
-import { Copy, Check, X, Share2 } from 'lucide-react';
+import { Copy, Check, ChevronLeft, Share2, ArrowDownLeft, Wallet, Building2, User } from 'lucide-react';
 import { getDefaultPaymentMethod } from '@/services/api';
 import { toast } from 'sonner';
 
@@ -128,8 +128,22 @@ const Receive = () => {
     return (
       <div className="app-container">
         <div className="page-wrapper">
-          <div className="card-modern py-8 text-center text-muted-foreground text-sm">
-            {!isConnected ? 'Wallet not connected.' : 'Loading profile...'}
+          <div className="flex items-center gap-2 mb-6 animate-fade-in">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="p-2 -ml-2 rounded-full hover:bg-secondary transition-colors"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <h1 className="text-xl font-bold">Receive Payment</h1>
+          </div>
+          <div className="card-modern py-12 text-center animate-slide-up">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-secondary flex items-center justify-center">
+              <ArrowDownLeft className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <p className="text-muted-foreground text-sm">
+              {!isConnected ? 'Wallet not connected.' : 'Loading profile...'}
+            </p>
           </div>
         </div>
       </div>
@@ -154,21 +168,25 @@ const Receive = () => {
     <div className="app-container">
       <div className="page-wrapper">
         {/* Header */}
-        <div className="flex justify-between items-center mb-6 animate-fade-in">
-          <h1 className="text-xl font-bold">Receive Payment</h1>
-          <button onClick={() => navigate('/dashboard')} className="p-2 text-muted-foreground hover:text-foreground transition-colors">
-            <X className="w-5 h-5" />
+        <div className="flex items-center gap-2 mb-6 animate-fade-in">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="p-2 -ml-2 rounded-full hover:bg-secondary transition-colors"
+          >
+            <ChevronLeft className="w-6 h-6" />
           </button>
+          <h1 className="text-xl font-bold">Receive Payment</h1>
         </div>
 
         {isLoading ? (
-          <div className="card-modern py-12 text-center text-muted-foreground text-sm animate-pulse">
-            Loading...
+          <div className="flex flex-col items-center justify-center py-20 animate-fade-in">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary mb-4" />
+            <p className="text-sm text-muted-foreground">Loading payment info...</p>
           </div>
         ) : !defaultWallet ? (
-          <div className="card-modern p-8 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-secondary flex items-center justify-center">
-              <span className="text-2xl">💳</span>
+          <div className="card-modern p-8 text-center animate-slide-up">
+            <div className="icon-circle-secondary w-16 h-16 mx-auto mb-4">
+              <ArrowDownLeft className="w-7 h-7" />
             </div>
             <h3 className="text-lg font-semibold mb-2">No Payment Method Set</h3>
             <p className="text-sm text-muted-foreground mb-6">
@@ -179,105 +197,130 @@ const Receive = () => {
             </button>
           </div>
         ) : (
-          <div className="space-y-4 animate-slide-up">
-            {/* Hero Banner - Only show for crypto wallets */}
-            {defaultWallet.type === 'onchain' && (
-              <div className="rounded-2xl bg-gradient-to-r from-primary/10 to-primary/5 p-5">
-                <div className="flex items-center gap-3 mb-1">
-                  <span className="text-xl">💰</span>
-                  <div>
-                    <p className="font-semibold">Share & Get Paid</p>
-                    <p className="text-sm text-muted-foreground">
-                      Share your username or wallet address
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+          <div className="space-y-5">
+
 
             {/* QR Code for Bank */}
             {defaultWallet.type === 'offchain' && vietQRUrl && (
-              <div className="card-modern p-6 text-center">
-                <img
-                  src={vietQRUrl}
-                  alt="VietQR Code"
-                  className="w-56 h-auto mx-auto object-contain"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
+              <div className="animate-slide-up">
+                <p className="section-title">QR Code</p>
+                <div className="card-modern p-6 flex flex-col items-center">
+                  <img
+                    src={vietQRUrl}
+                    alt="VietQR Code"
+                    className="w-60 h-auto object-contain rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground mt-3">Scan to pay via bank transfer</p>
+                </div>
               </div>
             )}
 
             {/* Payment Info Card */}
-            <div className="card-modern divide-y divide-border">
-              {/* Username - Always shown */}
-              <div
-                className="flex items-center justify-between p-4 cursor-pointer hover:bg-secondary/30 transition-colors"
-                onClick={() => copyToClipboard(`@${username}`, 'username')}
-              >
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Username</p>
-                  <p className="font-semibold text-lg mt-0.5">@{username}</p>
-                </div>
-                {copiedField === 'username' ? (
-                  <Check className="w-5 h-5 text-success" />
-                ) : (
-                  <Copy className="w-5 h-5 text-muted-foreground" />
-                )}
-              </div>
-
-              {defaultWallet.type === 'onchain' ? (
-                /* Wallet Address */
+            <div className="animate-slide-up stagger-1">
+              <p className="section-title">Payment Details</p>
+              <div className="card-modern divide-y divide-border overflow-hidden">
+                {/* Username - Always shown */}
                 <div
                   className="flex items-center justify-between p-4 cursor-pointer hover:bg-secondary/30 transition-colors"
-                  onClick={() => defaultWallet.address && copyToClipboard(defaultWallet.address, 'address')}
+                  onClick={() => copyToClipboard(`@${username}`, 'username')}
                 >
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Wallet Address</p>
-                    <p className="font-mono text-sm mt-0.5">{shortAddress}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="icon-circle bg-secondary flex-shrink-0">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Username</p>
+                      <p className="font-semibold text-base mt-0.5">@{username}</p>
+                    </div>
                   </div>
-                  {copiedField === 'address' ? (
-                    <Check className="w-5 h-5 text-success" />
+                  {copiedField === 'username' ? (
+                    <Check className="w-5 h-5 text-success flex-shrink-0" />
                   ) : (
-                    <Copy className="w-5 h-5 text-muted-foreground" />
+                    <Copy className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                   )}
                 </div>
-              ) : (
-                /* Bank Details */
-                <>
-                  <div className="flex items-center justify-between p-4">
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Bank</p>
-                      <p className="font-medium mt-0.5">{defaultWallet.bankName}</p>
-                    </div>
-                  </div>
+
+                {defaultWallet.type === 'onchain' ? (
+                  /* Wallet Address */
                   <div
                     className="flex items-center justify-between p-4 cursor-pointer hover:bg-secondary/30 transition-colors"
-                    onClick={() => defaultWallet.accountNumber && copyToClipboard(defaultWallet.accountNumber, 'account')}
+                    onClick={() => defaultWallet.address && copyToClipboard(defaultWallet.address, 'address')}
                   >
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Account Number</p>
-                      <p className="font-mono font-semibold text-lg mt-0.5">{defaultWallet.accountNumber}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="icon-circle bg-secondary flex-shrink-0">
+                        <Wallet className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Wallet Address</p>
+                        <p className="font-mono text-sm mt-0.5">{shortAddress}</p>
+                      </div>
                     </div>
-                    {copiedField === 'account' ? (
-                      <Check className="w-5 h-5 text-success" />
+                    {copiedField === 'address' ? (
+                      <Check className="w-5 h-5 text-success flex-shrink-0" />
                     ) : (
-                      <Copy className="w-5 h-5 text-muted-foreground" />
+                      <Copy className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                     )}
                   </div>
-                </>
-              )}
+                ) : (
+                  /* Bank Details */
+                  <>
+                    <div className="flex items-center gap-3 p-4">
+                      <div className="icon-circle bg-secondary flex-shrink-0">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Bank</p>
+                        <p className="font-medium mt-0.5">{defaultWallet.bankName}</p>
+                      </div>
+                    </div>
+                    <div
+                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-secondary/30 transition-colors"
+                      onClick={() => defaultWallet.accountNumber && copyToClipboard(defaultWallet.accountNumber, 'account')}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="icon-circle bg-secondary flex-shrink-0">
+                          <Copy className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider">Account Number</p>
+                          <p className="font-mono font-semibold text-lg mt-0.5">{defaultWallet.accountNumber}</p>
+                        </div>
+                      </div>
+                      {copiedField === 'account' ? (
+                        <Check className="w-5 h-5 text-success flex-shrink-0" />
+                      ) : (
+                        <Copy className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      )}
+                    </div>
+                    {defaultWallet.accountName && (
+                      <div className="flex items-center gap-3 p-4">
+                        <div className="icon-circle bg-secondary flex-shrink-0">
+                          <User className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider">Account Name</p>
+                          <p className="font-medium mt-0.5">{defaultWallet.accountName}</p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Share Button */}
-            <button
-              onClick={handleShare}
-              className="w-full py-4 rounded-xl border border-border hover:bg-secondary/50 transition-colors flex items-center justify-center gap-2 font-medium"
-            >
-              <Share2 className="w-5 h-5" />
-              Share Payment Details
-            </button>
+            <div className="animate-slide-up stagger-2">
+              <button
+                onClick={handleShare}
+                className="btn-primary flex items-center justify-center gap-2"
+              >
+                <Share2 className="w-5 h-5" />
+                Share Payment Details
+              </button>
+            </div>
           </div>
         )}
       </div>
