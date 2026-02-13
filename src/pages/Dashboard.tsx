@@ -65,9 +65,9 @@ const Dashboard = () => {
         return (
             <div className="app-container flex items-center justify-center h-screen">
                 <div className="text-center">
-                    <div className="text-lg font-semibold">Chưa đăng nhập</div>
-                    <button className="btn btn-primary mt-4" onClick={() => navigate('/login')}>
-                        Quay lại Login
+                    <div className="text-lg font-semibold">Not logged in</div>
+                    <button className="btn-primary mt-4" onClick={() => navigate('/login')}>
+                        Go to Login
                     </button>
                 </div>
             </div>
@@ -78,10 +78,10 @@ const Dashboard = () => {
         return (
             <div className="app-container flex items-center justify-center h-screen">
                 <div className="text-center">
-                    <div className="text-lg font-semibold">Wallet chưa connect</div>
-                    <div className="text-sm opacity-70 mt-1">Bạn cần connect ví Sui để xem Dashboard.</div>
-                    <button className="btn btn-primary mt-4" onClick={() => navigate('/login')}>
-                        Quay lại Login
+                    <div className="text-lg font-semibold">Wallet not connected</div>
+                    <div className="text-sm text-muted-foreground mt-1">Connect your Sui wallet to view the Dashboard.</div>
+                    <button className="btn-primary mt-4" onClick={() => navigate('/login')}>
+                        Go to Login
                     </button>
                 </div>
             </div>
@@ -93,13 +93,13 @@ const Dashboard = () => {
             <div className="app-container flex items-center justify-center h-screen">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto mb-4" />
-                    <div className="text-lg font-semibold">Đang tải hồ sơ</div>
-                    <div className="text-sm opacity-70 mt-1">Vui lòng đợi...</div>
+                    <div className="text-lg font-semibold">Loading profile</div>
+                    <div className="text-sm text-muted-foreground mt-1">Please wait...</div>
                     <button
-                        className="btn btn-ghost text-sm mt-4"
+                        className="btn-ghost text-sm mt-4"
                         onClick={() => window.location.reload()}
                     >
-                        Tải lại trang
+                        Reload page
                     </button>
                 </div>
             </div>

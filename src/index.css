@@ -288,6 +288,10 @@
   .tag-success {
     @apply inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-success text-success-foreground shadow-sm;
   }
+
+  .tag-warning {
+    @apply inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-warning/10 text-warning;
+  }
 }
 
 /* Animations */
