@@ -91,10 +91,14 @@ const Onboarding = () => {
       setUsername(clean);
 
       // Refresh profile to sync user data with AuthContext
-      // Use timeout fallback in case refreshProfile hangs
+      // Use a flag to prevent double navigation from timeout + normal flow
+      let hasNavigated = false;
       const redirectTimeout = setTimeout(() => {
-        toast.info('Taking longer than expected...');
-        navigate('/dashboard');
+        if (!hasNavigated) {
+          hasNavigated = true;
+          toast.info('Taking longer than expected...');
+          navigate('/dashboard');
+        }
       }, 5000);
 
       try {
@@ -105,7 +109,10 @@ const Onboarding = () => {
       }
 
       clearTimeout(redirectTimeout);
-      navigate('/dashboard');
+      if (!hasNavigated) {
+        hasNavigated = true;
+        navigate('/dashboard');
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Onboarding failed';
       setError(message);

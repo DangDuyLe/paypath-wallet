@@ -50,17 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.data);
   }, []);
 
-  const syncKycStatus = useCallback(async (walletAddress?: string | null) => {
-    const t = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!t) return;
-    if (!walletAddress) return;
 
-    try {
-      await getKycStatus(walletAddress);
-    } catch {
-      // ignore KYC sync errors
-    }
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

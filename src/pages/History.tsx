@@ -71,7 +71,7 @@ const History = () => {
                         <h1 className="text-xl font-bold">Transaction History</h1>
                     </div>
                     <button
-                        onClick={refreshBalance}
+                        onClick={() => refreshBalance()}
                         disabled={isLoadingBalance}
                         className="p-2 border border-border rounded-xl hover:bg-secondary transition-colors disabled:opacity-50"
                     >
@@ -136,7 +136,7 @@ const History = () => {
                                                     </div>
                                                 </div>
                                                 <p className="text-xs text-muted-foreground">
-                                                    {tx.type === 'sent' ? `To ${tx.to}` : `From ${tx.from}`} • {formatTime(tx.timestamp)}
+                                                    {tx.type === 'sent' ? `To ${tx.to || 'Unknown'}` : `From ${tx.from || 'Unknown'}`} • {formatTime(tx.timestamp)}
                                                 </p>
                                             </div>
                                         </div>

@@ -31,7 +31,7 @@ const Login = () => {
   const [copied, setCopied] = useState(false);
   const [showWalletOptions, setShowWalletOptions] = useState(false);
   const { loginWithWallet, isAuthLoading } = useAuth();
-  const [, setAuthError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Use currentAccount if valid, otherwise fallback to first account if available
   const activeAccount = currentAccount || (accounts.length > 0 ? accounts[0] : null);
@@ -119,11 +119,16 @@ const Login = () => {
                 </div>
               </div>
 
+              {authError && (
+                <p className="text-destructive text-sm text-center bg-destructive/10 py-2 rounded-xl">{authError}</p>
+              )}
+
               <button
                 onClick={handleAuthLogin}
+                disabled={isAuthLoading}
                 className="btn-primary flex items-center justify-center gap-2"
               >
-                Continue to App
+                {isAuthLoading ? 'Signing...' : 'Continue to App'}
                 <ChevronRight className="w-4 h-4" />
               </button>
 
@@ -182,38 +187,6 @@ const Login = () => {
                 </div>
               </div>
             </>
-          ) : currentAccount && showWalletOptions ? (
-            /* Connected Wallet Options Card */
-            <div className="card-modern p-5 space-y-4 animate-fade-in">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium">Connected Wallet</p>
-                  <p className="text-sm text-muted-foreground font-mono">
-                    {currentAccount.address.slice(0, 8)}...{currentAccount.address.slice(-6)}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={handleAuthLogin}
-                disabled={isAuthLoading}
-                className="btn-primary flex items-center justify-center gap-2"
-              >
-                {isAuthLoading ? 'Signing...' : 'Continue to App'}
-                <ChevronRight className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={handleDisconnect}
-                className="w-full py-3 rounded-xl border border-destructive text-destructive hover:bg-destructive hover:text-white transition-colors flex items-center justify-center gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                Disconnect Wallet
-              </button>
-            </div>
           ) : (
             /* Desktop: Just show ConnectButton */
             <div onClick={handleConnectClick}>

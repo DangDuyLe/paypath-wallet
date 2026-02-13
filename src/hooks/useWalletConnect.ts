@@ -2,8 +2,8 @@ import SignClient from '@walletconnect/sign-client';
 import { useState, useEffect, useCallback } from 'react';
 
 // WalletConnect Project ID - Get from https://cloud.walletconnect.com
-// Using a public demo project ID for testing - should be replaced with your own
-const PROJECT_ID = 'e5f0f4c4f3c7f8b0a5d7c9a1b2e3f4d5';
+// Set VITE_WC_PROJECT_ID in your .env file for production
+const PROJECT_ID = import.meta.env.VITE_WC_PROJECT_ID || 'e5f0f4c4f3c7f8b0a5d7c9a1b2e3f4d5';
 
 const SUI_CHAIN = 'sui:mainnet';
 

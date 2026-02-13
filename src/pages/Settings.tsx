@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
@@ -11,7 +11,6 @@ import {
   addOnchainWallet,
   deleteOffchainBank,
   deleteOnchainWallet,
-  getData,
   getDefaultPaymentMethod,
   getKycLink,
   getKycStatus,
@@ -94,7 +93,8 @@ const Settings = () => {
   const [showKycModal, setShowKycModal] = useState(false);
 
   // Create unified display list: include currentAccount if not already in linkedWallets
-  const displayWallets = (() => {
+  // Memoized to prevent infinite re-render loops in the auto-save useEffect
+  const displayWallets = useMemo(() => {
     const wallets = [...linkedWallets];
     const currentAddress = currentAccount?.address;
 
@@ -109,15 +109,18 @@ const Settings = () => {
       }
     }
     return wallets;
-  })();
+  }, [linkedWallets, currentAccount?.address]);
 
   // Auto-save session wallet if it's the only one
   useEffect(() => {
     const autoSave = async () => {
       // If we have exactly 1 wallet and it's a temporary session one
       if (displayWallets.length === 1 && displayWallets[0].walletId === 'current-session' && displayWallets[0].address) {
+        // Guard: don't re-attempt for the same address
+        if (autoSaveAttempted.current === displayWallets[0].address) return;
         // We only trigger this if we aren't already loading/processing
         if (!isLoadingSettings) {
+          autoSaveAttempted.current = displayWallets[0].address;
           await handleSetDefault('current-session', 'wallet', displayWallets[0].address);
         }
       }
@@ -382,7 +385,8 @@ const Settings = () => {
             toast.error('Wallet already connected to another account');
           }
         } catch (retryErr) {
-          // Silent failure on retry
+          console.error('Failed to retry set default after 409:', retryErr);
+          toast.error('Failed to set default wallet');
         }
       }
 
@@ -393,6 +397,13 @@ const Settings = () => {
   };
 
   const handleRemoveBank = async (id: string) => {
+    if (isDefault(id, 'bank')) {
+      toast.error('Cannot remove default bank account', {
+        description: 'Please set another account as default first.'
+      });
+      return;
+    }
+
     setSettingsError('');
     setIsLoadingSettings(true);
     try {
@@ -853,7 +864,7 @@ const Settings = () => {
                 </div>
               ) : (
                 (linkedBanks || []).map((bank) => (
-                  <div key={`${bank.bankId}-${bank.bankBin}-${bank.accountNumber}`} className="row-item px-4">
+                  <div key={bank.bankId} className="row-item px-4">
                     <div className="flex items-center gap-3">
                       <Building2 className="w-5 h-5" />
                       <div>
@@ -917,7 +928,7 @@ const Settings = () => {
                 <button
                   onClick={handleStartKyc}
                   disabled={isLoadingSettings || !walletAddressForKyc || kycStatus === 'pending'}
-                  className="w-full py-3 mt-4 border border-border hover:bg-accent transition-colors"
+                  className="w-full py-3 mt-4 rounded-xl border border-border hover:bg-accent transition-colors"
                 >
                   {kycStatus === 'pending' ? 'Verification in Progress' : 'Start KYC'}
                 </button>

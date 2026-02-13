@@ -125,28 +125,14 @@ const Send = () => {
 
   // intentionally placed after scan/offramp-related state declarations
   // to avoid temporal-dead-zone issues
+  // Poll exchange rate every 10s on Send screen
+  // Fetches immediately on mount and whenever recipientCountry changes
   useEffect(() => {
-    if (scanResult !== 'external') return;
-
-    // Fetch immediately, then poll every 10s
     fetchRate(recipientCountry);
 
     const intervalId = window.setInterval(() => {
       fetchRate(recipientCountry);
     }, 10_000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [fetchRate, recipientCountry, scanResult]);
-  useEffect(() => {
-    // Poll $1 recipient-gets quote every 10s on Send screen
-    // Default to VN until scan provides a specific country
-    const intervalId = window.setInterval(() => {
-      fetchRate(recipientCountry);
-    }, 10_000);
-
-    fetchRate(recipientCountry);
 
     return () => {
       window.clearInterval(intervalId);
@@ -516,9 +502,10 @@ const Send = () => {
         }
 
         if (bank.amount && bank.amount > 0) {
-          // VietQR amounts are in VND - convert to USD
+          // VietQR amounts are in VND - convert to USD using live rate
           const vndAmount = bank.amount;
-          const usdAmount = vndAmount / 25500;
+          const currentRate = exchangeRate || 25500;
+          const usdAmount = vndAmount / currentRate;
           setAmountVnd(vndAmount.toString());
           setAmount(usdAmount.toFixed(2));
           setAmountSource('vnd');
@@ -543,11 +530,11 @@ const Send = () => {
     if ((scanResult === 'external' && externalBank) || qrStringToUse) {
       const isVnRecipient = (recipientCountry ?? '').toUpperCase() === 'VN';
       if (kycApproved) {
-        if (amountNum < 0.7) { setError('Minimum amount per transaction is $0.7'); return; }
+        if (amountNum < 0.71) { setError('Minimum amount per transaction is $0.71'); return; }
         if (amountNum > 500) { setError('Maximum amount per transaction is $500'); return; }
       } else {
         if (!isVnRecipient) { openKycPopup('KYC verification required for this recipient'); return; }
-        if (amountNum < 0.7) { openKycPopup('Minimum amount per transaction is $0.7'); return; }
+        if (amountNum < 0.71) { openKycPopup('Minimum amount per transaction is $0.71'); return; }
         if (amountNum >= 4) {
           openKycPopup('KYC verification required for amounts of $4 or more');
           return;
@@ -942,7 +929,13 @@ const Send = () => {
               </div>
               <div className="flex justify-between items-center py-3 bg-secondary -mx-4 px-4 rounded-xl">
                 <span className="font-semibold text-sm">Total</span>
-                <span className="font-bold">${parseFloat(amount).toFixed(3)}</span>
+                <span className="font-bold">${(() => {
+                  const base = parseFloat(amount);
+                  const fee = isExternal && offrampQuote?.platformFee?.cryptoEquivalent != null
+                    ? Number(offrampQuote.platformFee.cryptoEquivalent)
+                    : 0;
+                  return (base + fee).toFixed(3);
+                })()}</span>
               </div>
             </div>
           </div>
@@ -1120,6 +1113,9 @@ const Send = () => {
                       onChange={(e) => {
                         setRecipient(e.target.value);
                         setRecipientValid(null);
+                        setRecipientDisplayName(null);
+                        setRecipientAddress(null);
+                        setRecipientType('none');
                         setError('');
                       }}
                       onBlur={checkRecipient}
@@ -1210,7 +1206,7 @@ const Send = () => {
 
           <button
             onClick={validate}
-            disabled={(!recipient && scanResult !== 'external') || !amount}
+            disabled={(!recipient && scanResult !== 'external') || !amount || isFetchingRate}
             className="btn-primary mt-6"
           >
             Continue

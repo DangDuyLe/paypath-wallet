@@ -5,51 +5,7 @@ import { useState, useEffect } from 'react';
 import { Copy, Check, ChevronLeft, Share2, ArrowDownLeft, Wallet, Building2, User } from 'lucide-react';
 import { getDefaultPaymentMethod } from '@/services/api';
 import { toast } from 'sonner';
-
-// VietQR Bank BIN mapping - map bankName to bank BIN code
-// Source: https://api.vietqr.io/v2/banks
-const BANK_BIN_MAP: Record<string, string> = {
-  'Vietcombank': '970436',
-  'VietinBank': '970415',
-  'BIDV': '970418',
-  'Agribank': '970405',
-  'Techcombank': '970407',
-  'MBBank': '970422',
-  'MB': '970422',
-  'ACB': '970416',
-  'VPBank': '970432',
-  'TPBank': '970423',
-  'Sacombank': '970403',
-  'HDBank': '970437',
-  'VIB': '970441',
-  'SHB': '970443',
-  'Eximbank': '970431',
-  'MSB': '970426',
-  'SeABank': '970440',
-  'OCB': '970448',
-  'Nam A Bank': '970428',
-  'PVcomBank': '970412',
-  'LienVietPostBank': '970449',
-  'BacABank': '970409',
-  'VietABank': '970427',
-  'ABBank': '970425',
-  'Kienlongbank': '970452',
-  'SCB': '970429',
-  'NCB': '970419',
-  'SaigonBank': '970400',
-  'PGBank': '970430',
-  'BaoVietBank': '970438',
-  'VietBank': '970433',
-  'PublicBank': '970439',
-  'GPBank': '970408',
-  'CBBank': '970444',
-  'UOB': '970458',
-  'HSBC': '458761',
-  'Woori Bank': '970457',
-  'Shinhan Bank': '970424',
-  'CIMB': '422589',
-  'Standard Chartered': '970410',
-};
+import { BANK_BIN_MAP } from '@/constants/bankBins';
 
 interface DefaultWalletInfo {
   type: 'onchain' | 'offchain';
@@ -210,9 +166,14 @@ const Receive = () => {
                     alt="VietQR Code"
                     className="w-60 h-auto object-contain rounded-lg"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      // Show fallback text in the parent container
+                      const fallback = target.nextElementSibling as HTMLElement | null;
+                      if (fallback) fallback.style.display = 'block';
                     }}
                   />
+                  <p className="text-sm text-muted-foreground mt-3 hidden">QR code unavailable. Share details manually.</p>
                   <p className="text-xs text-muted-foreground mt-3">Scan to pay via bank transfer</p>
                 </div>
               </div>

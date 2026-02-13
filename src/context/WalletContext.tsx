@@ -3,9 +3,9 @@ import { useSignAndExecuteTransaction, useSuiClient, useCurrentAccount } from '@
 import { Transaction } from '@mysten/sui/transactions';
 
 
-// Testnet USDC via Aftermath Faucet
+// Mainnet USDC coin type
 const USDC_COIN_TYPE = "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC";
-const USDC_DECIMALS = 6; // Testnet Faucet USDC typically has 9 decimals
+const USDC_DECIMALS = 6; // Sui Mainnet USDC uses 6 decimals
 
 interface TransactionRecord {
   id: string;
@@ -56,31 +56,10 @@ interface HiddenWalletUser {
 type DefaultAccountType = 'wallet' | 'bank';
 type KYCStatus = 'unverified' | 'pending' | 'verified';
 
-// Mock registered users database
-const registeredUsers: Record<string, HiddenWalletUser> = {
-  'duy3000': {
-    username: 'duy3000',
-    avatar: 'D',
-    walletAddress: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-    linkedBank: {
-      id: '1',
-      bankName: 'Vietcombank',
-      accountNumber: '1234567890',
-      beneficiaryName: 'NGUYEN VAN A',
-    },
-  },
-  'alice_sui': {
-    username: 'alice_sui',
-    avatar: 'A',
-    walletAddress: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
-    linkedBank: {
-      id: '2',
-      bankName: 'Techcombank',
-      accountNumber: '0987654321',
-      beneficiaryName: 'TRAN THI B',
-    },
-  },
-};
+// Legacy mock registered users — kept as offline fallback for lookupUsername/lookupBankAccount.
+// Real lookups use the /users/lookup API via Send.tsx checkRecipient flow.
+// TODO: Remove once all callers use the real API exclusively.
+const registeredUsers: Record<string, HiddenWalletUser> = {};
 
 interface WalletState {
   username: string | null;
@@ -125,7 +104,8 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 
 
-// Exchange rate: 1 USDC = 25,500 VND
+// Display-only exchange rate for balanceVnd field (approximate, not used for transactions).
+// Transactions use the live rate from paymentsQuote API.
 const USDC_TO_VND_RATE = 25500;
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -144,7 +124,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     defaultAccountId: null,
     defaultAccountType: 'wallet',
     defaultWalletAddress: null,
-    contacts: ['@alice', '@bob'],
+    contacts: [],
     kycStatus: 'unverified',
     isLoadingBalance: false,
     isProfileLoading: false,
@@ -407,10 +387,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
 
 
-  // Auto-refresh balance when account connects or changes
+  // Auto-refresh balance when account connects or default changes
   useEffect(() => {
     refreshBalance();
-  }, [currentAccount?.address, refreshBalance, state.defaultAccountId, state.defaultAccountType, state.linkedWallets]);
+  }, [currentAccount?.address, refreshBalance, state.defaultAccountId, state.defaultAccountType]);
 
   // Hydrate profile is handled by AuthContext/ProtectedRoute.
   useEffect(() => {
@@ -442,7 +422,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     try {
       // Convert amount to smallest unit using USDC_DECIMALS
-      const amountInSmallestUnit = BigInt(Math.floor(amount * Math.pow(10, USDC_DECIMALS)));
+      const amountInSmallestUnit = BigInt(Math.round(amount * Math.pow(10, USDC_DECIMALS)));
 
       // Get user's USDC coins
       const coins = await suiClient.getCoins({
@@ -542,12 +522,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       defaultAccountId: null,
       defaultAccountType: 'wallet',
       defaultWalletAddress: null,
-      contacts: ['@alice', '@bob'],
+      contacts: [],
       kycStatus: 'unverified',
       isLoadingBalance: false,
       isProfileLoading: false,
-      rewardPoints: 1250,
-      referralStats: { totalCommission: 15.5, f0Volume: 50000, f0Count: 12 },
+      rewardPoints: 0,
+      referralStats: { totalCommission: 0, f0Volume: 0, f0Count: 0 },
       coins: [],
     });
   };
