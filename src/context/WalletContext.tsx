@@ -311,11 +311,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (coin.coinType.includes('::sui::SUI')) {
           decimals = 9;
           symbol = 'SUI';
-          iconUrl = 'https://cryptologos.cc/logos/sui-sui-logo.png';
+          iconUrl = '/token-icons/sui.svg';
         } else if (coin.coinType.includes('::usdc::USDC') || coin.coinType === USDC_COIN_TYPE) {
           decimals = USDC_DECIMALS;
           symbol = 'USDC';
-          iconUrl = 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png';
+          iconUrl = '/token-icons/usdc.svg';
         } else {
           // Only fetch metadata for unknown coins
           try {

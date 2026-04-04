@@ -57,7 +57,6 @@ const Settings = () => {
   const [linkedBanks, setLinkedBanks] = useState<ApiBank[]>([]);
   const [linkedWallets, setLinkedWallets] = useState<ApiWallet[]>([]);
   const [defaultAccountId, setDefaultAccountId] = useState<string | null>(null);
-  const [showAllCoins, setShowAllCoins] = useState(false);
   const [defaultAccountType, setDefaultAccountType] = useState<'wallet' | 'bank'>('wallet');
   // Get kycStatus directly from user profile - no flicker
   const kycStatus = (() => {
@@ -110,6 +109,10 @@ const Settings = () => {
     }
     return wallets;
   }, [linkedWallets, currentAccount?.address]);
+
+  const displayedCoins = useMemo(() => {
+    return coins.filter((coin) => coin.symbol === 'SUI' || coin.symbol === 'USDC');
+  }, [coins]);
 
   // Auto-save session wallet if it's the only one
   useEffect(() => {
@@ -812,14 +815,32 @@ const Settings = () => {
                         <div className="px-4 pb-3 pt-1 bg-secondary/30">
                           {isLoadingBalance ? (
                             <p className="text-xs text-muted-foreground">Loading balance...</p>
-                          ) : coins.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">No coins</p>
+                          ) : displayedCoins.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">No SUI/USDC found</p>
                           ) : (
                             <div className="flex flex-wrap gap-2">
-                              {(showAllCoins ? coins : coins.slice(0, 3)).map((coin) => (
+                              {displayedCoins.map((coin) => (
                                 <div key={coin.coinType} className="flex items-center gap-1.5 bg-background rounded-full px-2 py-1 text-xs">
                                   {coin.iconUrl ? (
-                                    <img src={coin.iconUrl} alt={coin.symbol} className="w-4 h-4 rounded-full" />
+                                    <>
+                                      <img
+                                        src={coin.iconUrl}
+                                        alt={coin.symbol}
+                                        className="w-4 h-4 rounded-full"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                          const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                          if (fallback) {
+                                            fallback.style.display = 'flex';
+                                          }
+                                        }}
+                                      />
+                                      <span
+                                        className="hidden w-4 h-4 rounded-full bg-secondary items-center justify-center text-[10px] font-bold"
+                                      >
+                                        {coin.symbol[0]}
+                                      </span>
+                                    </>
                                   ) : (
                                     <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">{coin.symbol[0]}</span>
                                   )}
@@ -828,14 +849,6 @@ const Settings = () => {
                                   </span>
                                 </div>
                               ))}
-                              {coins.length > 3 && (
-                                <button
-                                  onClick={() => setShowAllCoins(!showAllCoins)}
-                                  className="text-xs text-muted-foreground hover:text-primary"
-                                >
-                                  {showAllCoins ? 'Less' : `+${coins.length - 3} more`}
-                                </button>
-                              )}
                             </div>
                           )}
                         </div>
